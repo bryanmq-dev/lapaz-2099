@@ -1,5 +1,6 @@
 import Fastify from 'fastify'
 import { migrate, pool, seed } from './db.ts'
+import { seedFleet } from './fleet.ts'
 import { Simulator } from './sim.ts'
 
 const PORT = Number(process.env.PORT ?? 3001)
@@ -14,7 +15,7 @@ const featureCollection = (rows: any[]) => ({
 app.get('/api/health', async () => ({ ok: true, tick: sim.tickNo, vehicles: sim.vehicles.length }))
 
 app.get('/api/routes', async () => featureCollection((await pool.query(
-  `SELECT r.id, r.code, r.name, r.direction, r.mode, r.color, r.headway_min, r.osm_relation_id, round(r.length_m) length_m,
+  `SELECT r.id, r.code, r.name, r.direction, r.mode, r.color, r.simulated, r.headway_min, r.osm_relation_id, round(r.length_m) length_m,
           u.name union_name, ST_AsGeoJSON(r.geom)::json geometry
    FROM routes r JOIN unions u ON u.id = r.union_id ORDER BY r.code, r.direction`)).rows))
 
@@ -76,6 +77,7 @@ async function main() {
   }
   await migrate()
   await seed()
+  await seedFleet()
   await sim.init()
   sim.start()
   await app.listen({ port: PORT, host: '0.0.0.0' })

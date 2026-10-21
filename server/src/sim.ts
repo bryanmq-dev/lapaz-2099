@@ -1,5 +1,7 @@
-// Simulador de flota sobre las rutas reales del caso de estudio.
-// Movimiento en TS (determinista); detección de alertas con SQL espacial en PostGIS.
+// Simulador de flota sobre las rutas reales del caso de estudio y la flota simulada de refuerzo.
+// Movimiento en TS (determinista, con seguimiento de vehículo); detección de alertas con SQL espacial en PostGIS.
+// La congestión NO se impone: aparece cuando muchos minibuses coinciden en el mismo corredor y las paradas
+// dentro del carril forman cola. Se mide sobre los tramos y de ahí salen las alertas y los desvíos.
 import { pool } from './db.ts'
 import { Path, dist, distToLine, project, unproject, type LL, type XZ } from './geo.ts'
 import { RoadGraph, type Segment } from './graph.ts'
@@ -7,21 +9,33 @@ import { RoadGraph, type Segment } from './graph.ts'
 export const OFF_ROUTE_M = 40      // distancia máxima a la ruta asignada
 export const STOP_ALERT_S = Number(process.env.STOP_ALERT_S ?? 45) // tiempo detenido fuera de paradas para alertar
 const BREAKDOWN_S = Number(process.env.BREAKDOWN_S ?? 100)
+const AUTO_PEAK = process.env.AUTO_PEAK !== '0' // hora punta automática (la comprobación de punta a punta la apaga)
 const LAYOVER_S = 40               // tramo fuera del Centro entre ida y vuelta (no se dibuja)
 const SAMPLE_M = 10
-const PRADO = 'Avenida 16 de Julio'
+const OBELISCO = project([-68.135081, -16.498602])
+
+// seguimiento de vehículo (Krauss): un minibús ≈ 9 m con holgura, 1,2 m/s² de aceleración, 3 m/s² de frenada
+const VEH_LEN = 9, ACCEL = 1.2, DECEL = 3, TAU = 1, DAWDLE = 0.3
+const SURGE_WINDOW_S = 90          // las unidades de refuerzo llegan al Prado repartidas en esta ventana
+const PEAK_EVERY_S = 480           // separación entre horas punta automáticas
+const JAM_ON = 0.55, JAM_OFF = 0.35 // nivel de congestión de un tramo para encenderse / apagarse (histéresis)
+const JAM_FREE_MS = 4.5            // velocidad a la que un tramo se considera libre
+const JAM_MIN_M = 150              // largo mínimo de tramos congestionados de una misma calle para abrir alerta
+const JAM_OPEN_KMH = 9             // y velocidad media máxima de los vehículos dentro de ese tramo
 
 interface RouteInfo {
-  id: number; code: string; direction: 'ida' | 'vuelta'; mode: string; color: string; union: string; name: string
-  base: Path; active: Path; stops: { name: string; at: number }[]; segAt: Segment[]
+  id: number; code: string; direction: 'ida' | 'vuelta'; mode: string; color: string; union: string; name: string; sim: boolean
+  base: Path; active: Path; activeSegAt: Segment[]; stops: { name: string; at: number }[]; segAt: Segment[]; obAt: number
+  sig: { at: number; group: 'A' | 'B' } | null // línea de pare del semáforo del Obelisco (A: Prado y Mcal. Santa Cruz · B: Camacho)
   detour: { names: string[]; extraM: number; pts: XZ[] } | null
 }
 
 interface Vehicle {
-  id: number; plate: string; driver: string; kind: string; code: string
+  id: number; plate: string; driver: string; kind: string; code: string; reserve: boolean
   route: RouteInfo; path: Path; segAt: Segment[]; progress: number
-  phase: 'ruta' | 'pausa'; wait: number; speed: number; heading: number; pos: XZ
+  phase: 'ruta' | 'pausa' | 'reserva'; wait: number; speed: number; next: number; heading: number; pos: XZ
   status: 'en_servicio' | 'desvio_autorizado'; breakdownUntil: number; nextStop: number; offPlan: boolean
+  vmax: number; queued: boolean; releaseAt: number
 }
 
 export interface CityEvent { id: number; time: string; level: 'ok' | 'info' | 'warn' | 'critical'; text: string }
@@ -42,19 +56,32 @@ export class Simulator {
   private timer: NodeJS.Timeout | null = null
   private busy = false
   private switched: Vehicle[] = [] // cambios de sentido pendientes de guardar antes de las posiciones
+  private jammed = new Set<number>()                                   // tramos congestionados (con histéresis)
+  private jams = new Map<string, { alertId: number; calm: number }>() // calles con alerta de congestión abierta
+  private jamBuild = new Map<string, number>()                         // segundos que cada calle lleva sobre el umbral
+  private peak: { since: number } | null = null
+  private nextPeakAt = Infinity
+  private rush = 0                // 0..1: más pasajeros por parada durante la hora punta
+  private controlUntil = 0        // agente de tránsito en el Obelisco hasta este instante
+  private noDetour = new Set<RouteInfo>() // líneas ya avisadas de que no tienen rodeo
+  private warmUntil = 0          // los vehículos parten superpuestos: no se abren alertas hasta que se reparten
 
   async init() {
     const segs = (await pool.query(`SELECT id, name, highway, oneway, source, target, length_m, congestion, ST_AsGeoJSON(geom)::json->'coordinates' coords FROM road_segments`)).rows
     this.graph = new RoadGraph(segs)
     const rs = (await pool.query(
-      `SELECT r.id, r.code, r.direction, r.mode, r.color, r.name, u.name union_name, ST_AsGeoJSON(r.geom)::json->'coordinates' coords,
+      `SELECT r.id, r.code, r.direction, r.mode, r.color, r.name, r.simulated, u.name union_name, ST_AsGeoJSON(r.geom)::json->'coordinates' coords,
               coalesce(json_agg(json_build_object('name', s.name, 'm', s.measure) ORDER BY s.seq) FILTER (WHERE s.id IS NOT NULL), '[]') stops
-       FROM routes r JOIN unions u ON u.id = r.union_id LEFT JOIN stops s ON s.route_id = r.id GROUP BY r.id, u.name ORDER BY r.code, r.direction`)).rows
+       FROM routes r JOIN unions u ON u.id = r.union_id LEFT JOIN stops s ON s.route_id = r.id GROUP BY r.id, u.name ORDER BY r.simulated, r.code, r.direction`)).rows
     this.routes = rs.map((r) => {
       const base = new Path((r.coords as LL[]).map(project))
+      const ob = base.locate(OBELISCO)
+      const segAt = this.sampleSegments(base)
+      const crossesOb = dist(base.at(ob).p, OBELISCO) < 40 && ob > 40
+      const fromCamacho = [30, 50, 70, 90].some((m) => /Camacho|Colón/.test(segAt[Math.floor(Math.max(0, ob - m) / SAMPLE_M)].name))
       return {
-        id: r.id, code: r.code, direction: r.direction, mode: r.mode, color: r.color, union: r.union_name, name: r.name,
-        base, active: base, detour: null, segAt: this.sampleSegments(base),
+        id: r.id, code: r.code, direction: r.direction, mode: r.mode, color: r.color, union: r.union_name, name: r.name, sim: r.simulated,
+        base, active: base, activeSegAt: segAt, detour: null, segAt, obAt: crossesOb ? ob : -1, sig: crossesOb ? { at: ob - 14, group: fromCamacho ? 'B' : 'A' } : null,
         stops: r.stops.filter((s: any) => s.m > 0.02 && s.m < 0.98).map((s: any) => ({ name: s.name, at: s.m * base.length })),
       }
     })
@@ -76,27 +103,32 @@ export class Simulator {
     await pool.query(`UPDATE vehicles SET status = 'en_servicio'`)
     await pool.query(`TRUNCATE vehicle_positions`)
     for (const s of this.graph.segments.values()) s.congestion = 0
-    for (const r of this.routes) { r.active = r.base; r.detour = null }
+    for (const r of this.routes) { r.active = r.base; r.activeSegAt = r.segAt; r.detour = null }
+    this.jammed.clear(); this.jams.clear(); this.jamBuild.clear(); this.noDetour.clear()
+    this.peak = null; this.rush = 0; this.controlUntil = 0; this.warmUntil = this.now + 45
+    this.nextPeakAt = AUTO_PEAK ? this.now + 20 : Infinity
     const rows = (await pool.query(
-      `SELECT v.id, v.plate, v.kind, u.full_name driver, r.code, r.direction FROM vehicles v JOIN users u ON u.id = v.driver_id
+      `SELECT v.id, v.plate, v.kind, v.reserve, u.full_name driver, r.code, r.direction FROM vehicles v JOIN users u ON u.id = v.driver_id
        JOIN routes r ON r.id = v.route_id ORDER BY r.code, v.id`)).rows
-    const byLine = new Map<string, any[]>()
-    rows.forEach((v) => byLine.set(v.code, [...(byLine.get(v.code) ?? []), v]))
-    this.vehicles = []
-    for (const [, list] of byLine) list.forEach((v, i) => {
+    const share = new Map<string, any[]>() // unidades en servicio de cada sentido de cada línea
+    for (const v of rows) if (!v.reserve) share.set(v.code + v.direction, [...(share.get(v.code + v.direction) ?? []), v])
+    this.vehicles = rows.map((v) => {
       const route = this.routes.find((r) => r.code === v.code && r.direction === v.direction)!
-      const share = list.filter((x) => x.direction === v.direction)
-      const k = share.indexOf(v)
-      const progress = ((k + 0.5 * (i % 2)) / share.length) * route.base.length * 0.96
-      this.vehicles.push({
-        id: v.id, plate: v.plate, driver: v.driver, kind: v.kind, code: v.code, route, path: route.base, segAt: route.segAt,
-        progress, phase: 'ruta', wait: 0, speed: 0, heading: 0, pos: route.base.at(progress).p, status: 'en_servicio',
+      const list = share.get(v.code + v.direction) ?? []
+      const k = list.indexOf(v)
+      // reparto uniforme con un desfase propio de cada línea para que no coincidan en el mismo punto
+      const progress = v.reserve ? 0 : ((k + hash(v.id * 3.7)) / list.length) * route.base.length * 0.96
+      return {
+        id: v.id, plate: v.plate, driver: v.driver, kind: v.kind, code: v.code, reserve: v.reserve, route, path: route.base, segAt: route.segAt,
+        progress, phase: v.reserve ? 'reserva' : 'ruta', wait: 0, speed: 0, next: 0, heading: route.base.at(progress).heading, pos: route.base.at(progress).p, status: 'en_servicio',
         breakdownUntil: 0, nextStop: route.stops.findIndex((s) => s.at > progress), offPlan: false,
-      })
+        vmax: (v.kind === 'trufi' ? 5 : 5.6) * (0.9 + 0.2 * hash(v.id)), queued: false, releaseAt: 0,
+      } as Vehicle
     })
     this.events = []
     this.openAlerts = []
-    this.log('info', `Simulación iniciada: ${this.vehicles.length} vehículos en ${this.routes.length / 2} líneas reales del Centro`)
+    const regular = this.vehicles.filter((v) => !v.reserve).length
+    this.log('info', `Simulación iniciada: ${regular} vehículos en servicio y ${this.vehicles.length - regular} unidades de refuerzo en reserva (${this.routes.length / 2} líneas: 3 reales y ${this.routes.filter((r) => r.sim).length / 2} simuladas)`)
     if (announce) this.log('ok', 'Simulación restablecida: sin congestión ni alertas')
   }
 
@@ -106,20 +138,14 @@ export class Simulator {
   stop() { if (this.timer) clearInterval(this.timer) }
   onSnapshot(fn: (s: unknown) => void) { this.listeners.add(fn); return () => { this.listeners.delete(fn) } }
 
-  private congestionAt(v: Vehicle) {
-    const seg = v.segAt[Math.min(v.segAt.length - 1, Math.floor(v.progress / SAMPLE_M))]
-    const major = /primary|secondary|trunk/.test(seg.highway)
-    const base = (major ? 0.18 : 0.06) + hash(seg.id) * (major ? 0.25 : 0.12)
-    return Math.min(1, seg.congestion + base * (0.85 + 0.15 * Math.sin(this.tickNo / 90 + seg.id)))
-  }
-
   async tick(dt = 1) {
     if (this.busy) return // nunca se solapan dos ticks
     this.busy = true
     try {
       this.tickNo++
       this.now += dt
-      for (const v of this.vehicles) this.move(v, dt)
+      this.runPeak()
+      this.step(dt)
       if (this.switched.length) {
         const sw = this.switched.splice(0)
         await pool.query(`UPDATE vehicles v SET route_id = x.r, status = x.st FROM unnest($1::int[], $2::int[], $3::text[]) AS x(id, r, st) WHERE v.id = x.id`,
@@ -128,11 +154,12 @@ export class Simulator {
       const live = this.vehicles.filter((v) => v.phase === 'ruta')
       if (live.length) {
         await pool.query(
-          `INSERT INTO vehicle_positions (vehicle_id, geom, speed_kmh, heading)
-           SELECT id, ST_SetSRID(ST_MakePoint(lon, lat), 4326), spd, hd FROM unnest($1::int[], $2::float8[], $3::float8[], $4::real[], $5::real[]) AS t(id, lon, lat, spd, hd)`,
-          [live.map((v) => v.id), ...[0, 1].map((k) => live.map((v) => unproject(v.pos)[k])), live.map((v) => v.speed * 3.6), live.map((v) => v.heading)],
+          `INSERT INTO vehicle_positions (vehicle_id, geom, speed_kmh, heading, queued)
+           SELECT id, ST_SetSRID(ST_MakePoint(lon, lat), 4326), spd, hd, q FROM unnest($1::int[], $2::float8[], $3::float8[], $4::real[], $5::real[], $6::bool[]) AS t(id, lon, lat, spd, hd, q)`,
+          [live.map((v) => v.id), ...[0, 1].map((k) => live.map((v) => unproject(v.pos)[k])), live.map((v) => v.speed * 3.6), live.map((v) => v.heading), live.map((v) => v.queued)],
         )
       }
+      await this.monitorTraffic(live, dt)
       await this.detectAlerts()
       if (this.tickNo % 60 === 0) await pool.query(`DELETE FROM vehicle_positions WHERE ts < now() - interval '30 minutes'`)
       const snap = this.snapshot()
@@ -144,22 +171,89 @@ export class Simulator {
     }
   }
 
-  private move(v: Vehicle, dt: number) {
-    if (v.phase === 'pausa') {
-      v.wait -= dt
-      if (v.wait <= 0) this.switchDirection(v)
-      return
+  // ---- movimiento: seguimiento de vehículo ----------------------------------------
+
+  /** Avanza un segundo: primero todos deciden su velocidad con el estado actual, después todos se mueven. */
+  private step(dt: number) {
+    const live: Vehicle[] = []
+    for (const v of this.vehicles) {
+      if (v.phase === 'pausa') { v.wait -= dt; if (v.wait <= 0) this.switchDirection(v) }
+      else if (v.phase === 'reserva') { if (v.releaseAt > 0 && this.now >= v.releaseAt) this.release(v) }
+      else live.push(v)
     }
-    if (v.breakdownUntil > this.now || v.wait > 0) { v.wait = Math.max(0, v.wait - dt); v.speed = 0; return }
-    const cruise = v.kind === 'trufi' ? 5.0 : 5.6 // m/s ≈ 18–20 km/h en el Centro
-    v.speed = cruise * Math.max(0.06, 1 - 0.9 * this.congestionAt(v))
+    for (const v of live) this.drive(v, live, dt)
+    for (const v of live) this.advance(v, dt)
+  }
+
+  /** Velocidad del siguiente segundo: libre, o la máxima segura detrás del vehículo que va delante (Krauss). */
+  private drive(v: Vehicle, live: Vehicle[], dt: number) {
+    v.queued = false
+    if (v.breakdownUntil > this.now || v.wait > 0) { v.next = 0; return }
+    let next = Math.min(v.vmax, v.speed + ACCEL * dt)
+    let lead = this.leaderOf(v, live)
+    const sig = v.path === v.route.base ? v.route.sig : null
+    if (sig && v.progress < sig.at && !this.green(sig.group)) {
+      const d = sig.at - v.progress // luz roja: la línea de pare actúa como un vehículo detenido, salvo que ya no alcance a frenar
+      if (d < 90 && d > (v.speed * v.speed) / (2 * DECEL) && (!lead || d < lead.gap)) lead = { gap: d, speed: 0 }
+    }
+    if (lead) {
+      const safe = lead.speed + (lead.gap - lead.speed * TAU) / ((v.speed + lead.speed) / (2 * DECEL) + TAU)
+      if (safe < next) { next = Math.max(0, safe); v.queued = lead.gap < 25 }
+    }
+    if (next > 0) next = Math.max(0, next - DAWDLE * ACCEL * dt * hash(v.id * 131 + this.tickNo)) // vacilación humana
+    v.next = next
+  }
+
+  /** Semáforo del Obelisco (supuesto de la simulación): fase A = Prado y Mcal. Santa Cruz, fase B = Camacho, con 3 s de despeje. */
+  private green(group: 'A' | 'B') {
+    const a = this.now < this.controlUntil ? 46 : 30, b = this.now < this.controlUntil ? 20 : 26 // el agente de tránsito da más verde al Prado
+    const t = this.now % (a + b + 6)
+    return group === 'A' ? t < a : t >= a + 3 && t < a + 3 + b
+  }
+
+  /** Vehículo más cercano por delante, en el mismo carril y sentido (sirve también donde se juntan varias líneas). */
+  private leaderOf(v: Vehicle, live: Vehicle[]) {
+    const th = (v.heading * Math.PI) / 180, hx = Math.sin(th), hz = -Math.cos(th)
+    let best: Vehicle | null = null, bestAhead = 60
+    for (const u of live) {
+      if (u === v) continue
+      const dx = u.pos[0] - v.pos[0], dz = u.pos[1] - v.pos[1]
+      const ahead = dx * hx + dz * hz
+      if (ahead <= 0.1 || ahead >= bestAhead || Math.abs(dx * hz - dz * hx) > 4) continue
+      const dh = Math.abs(((u.heading - v.heading + 540) % 360) - 180)
+      if (dh > 50) continue
+      if (dh > 12 && u.id > v.id) continue // al confluir flujos con rumbos distintos cede solo uno de los dos: sin esto se traban en círculo
+      best = u; bestAhead = ahead
+    }
+    return best && { gap: bestAhead - VEH_LEN, speed: best.speed }
+  }
+
+  private advance(v: Vehicle, dt: number) {
+    if (v.wait > 0 && v.breakdownUntil <= this.now) v.wait = Math.max(0, v.wait - dt)
+    v.speed = v.next
     v.progress += v.speed * dt
     const stop = v.path === v.route.base ? v.route.stops[v.nextStop] : undefined
-    if (stop && v.progress >= stop.at) { v.progress = stop.at; v.wait = 6 + (v.id % 5); v.nextStop++ }
-    if (v.progress >= v.path.length) { v.phase = 'pausa'; v.wait = LAYOVER_S; v.speed = 0; return }
+    if (stop && v.progress >= stop.at) {
+      v.progress = stop.at; v.nextStop++
+      v.wait = this.dwell(v, v.nextStop)
+      if (v.wait > 0) v.speed = 0 // el minibús se detiene EN el carril: quien viene detrás espera
+    }
+    if (v.progress >= v.path.length) {
+      v.speed = 0
+      if (v.reserve) { v.phase = 'reserva'; v.releaseAt = 0 } // la unidad de refuerzo regresa a base
+      else { v.phase = 'pausa'; v.wait = LAYOVER_S }
+      return
+    }
     const at = v.path.at(v.progress)
     v.pos = at.p
     v.heading = at.heading
+  }
+
+  /** Segundos de parada: a veces nadie sube ni baja; en hora punta se tarda más. El agente de tránsito lo acorta. */
+  private dwell(v: Vehicle, stopNo: number) {
+    if (hash(v.id * 7.3 + stopNo) < 0.5) return 0
+    const t = 2 + (v.id % 5) * 0.8 + 5 * this.rush
+    return Math.round(this.now < this.controlUntil ? t * 0.4 : t)
   }
 
   /** Al terminar el tramo del Centro, el vehículo vuelve en el sentido contrario (ida ↔ vuelta). */
@@ -167,13 +261,151 @@ export class Simulator {
     const next = this.routes.find((r) => r.code === v.code && r.direction !== v.route.direction)!
     v.route = next
     v.path = next.active
-    v.segAt = next.active === next.base ? next.segAt : this.sampleSegments(next.active)
+    v.segAt = next.activeSegAt
     v.status = next.detour ? 'desvio_autorizado' : 'en_servicio'
     v.offPlan = false
     v.progress = 0
     v.nextStop = 0
     v.phase = 'ruta'
     this.switched.push(v)
+  }
+
+  // ---- hora punta: unidades de refuerzo ---------------------------------------------
+
+  /** Una unidad de refuerzo entra al Centro por el inicio de su ruta. */
+  private release(v: Vehicle) {
+    v.path = v.route.active
+    v.segAt = v.route.activeSegAt
+    v.status = v.route.detour ? 'desvio_autorizado' : 'en_servicio'
+    v.offPlan = false; v.progress = 0; v.nextStop = 0; v.releaseAt = 0; v.speed = 2; v.phase = 'ruta'
+    v.pos = v.path.at(0).p
+    v.heading = v.path.at(0).heading
+  }
+
+  /**
+   * Sale el refuerzo de hora punta: cada unidad parte de modo que llegue al Prado dentro de una ventana de
+   * SURGE_WINDOW_S segundos. Nadie impone la congestión: la causa el exceso de minibuses que se juntan en el corredor.
+   */
+  private startPeak(): number {
+    const units = this.vehicles.filter((v) => v.reserve && v.phase === 'reserva')
+    if (!units.length) return 0
+    const first = this.now + 10
+    for (const v of units) {
+      const toPrado = Math.max(0, v.route.obAt - 300) / 4 // tiempo hasta 300 m antes del Obelisco a velocidad media
+      v.releaseAt = Math.max(this.now + 1, first + hash(v.id * 17.7) * SURGE_WINDOW_S - toPrado)
+    }
+    this.peak = { since: this.now }
+    this.rush = 1
+    this.log('warn', `Hora punta: ${units.length} minibuses de refuerzo salen hacia el Centro (Prado · Obelisco · Camacho)`)
+    return units.length
+  }
+
+  private runPeak() {
+    if (!this.peak && this.now >= this.nextPeakAt) this.startPeak()
+    if (this.peak && this.now > this.peak.since + 5 && !this.vehicles.some((v) => v.reserve && (v.phase === 'ruta' || v.releaseAt > 0))) {
+      this.peak = null
+      this.nextPeakAt = AUTO_PEAK ? this.now + PEAK_EVERY_S : Infinity
+      this.log('ok', 'Fin de la hora punta: las unidades de refuerzo regresan a base')
+    }
+    this.rush = this.peak ? (this.now < this.controlUntil ? 0.3 : 1) : Math.max(0, this.rush - 1 / 90)
+  }
+
+  // ---- congestión medida, alertas y desvíos ---------------------------------------------
+
+  /**
+   * Lee la velocidad real de los vehículos en cada tramo (media móvil), marca los tramos congestionados y abre o cierra
+   * una alerta por calle. Al abrirse la primera se proponen desvíos; al cerrarse la última se retiran.
+   */
+  private async monitorTraffic(live: Vehicle[], dt: number) {
+    const stat = new Map<number, { n: number; sum: number }>()
+    for (const v of live) {
+      const seg = v.segAt[Math.min(v.segAt.length - 1, Math.floor(v.progress / SAMPLE_M))]
+      const e = stat.get(seg.id)
+      if (e) { e.n++; e.sum += v.speed } else stat.set(seg.id, { n: 1, sum: v.speed })
+    }
+    const byStreet = new Map<string, Segment[]>()
+    for (const s of this.graph.segments.values()) {
+      const e = stat.get(s.id)
+      const raw = e && e.n >= 3 ? Math.min(1, Math.max(0, 1 - e.sum / e.n / JAM_FREE_MS)) : 0
+      s.congestion = s.congestion * 0.8 + raw * 0.2
+      if (s.congestion >= JAM_ON) this.jammed.add(s.id)
+      else if (s.congestion < JAM_OFF) this.jammed.delete(s.id)
+      if (this.jammed.has(s.id) && s.name) byStreet.set(s.name, [...(byStreet.get(s.name) ?? []), s])
+    }
+    const metersOf = (list: Segment[] | undefined) => (list ?? []).reduce((a, s) => a + s.length, 0)
+    let changed = false
+    for (const [name, list] of byStreet) {
+      if (this.jams.has(name)) continue
+      if (this.now < this.warmUntil) continue
+      const t = (this.jamBuild.get(name) ?? 0) + dt
+      this.jamBuild.set(name, metersOf(list) >= JAM_MIN_M ? t : 0)
+      if (t >= 12 && metersOf(list) >= JAM_MIN_M && (await this.openJam(name, list))) changed = true
+    }
+    for (const name of [...this.jamBuild.keys()]) if (!byStreet.has(name)) this.jamBuild.delete(name)
+    for (const [name, jam] of this.jams) {
+      if (metersOf(byStreet.get(name)) >= 40) { jam.calm = 0; continue }
+      jam.calm += dt
+      if (jam.calm >= 25) {
+        await pool.query(`UPDATE alerts SET resolved_at = now() WHERE id = $1`, [jam.alertId])
+        this.jams.delete(name)
+        this.log('ok', `Congestión resuelta en ${name}: el flujo se normaliza`)
+        changed = true
+      }
+    }
+    if (changed) {
+      if (this.jams.size) await this.applyDetours()
+      else this.clearDetours()
+    }
+  }
+
+  private async openJam(name: string, list: Segment[]) {
+    const worst = list.reduce((a, s) => (s.congestion > a.congestion ? s : a))
+    const inside = new Set(list.map((s) => s.id))
+    const cars = this.vehicles.filter((v) => v.phase === 'ruta' && inside.has(v.segAt[Math.min(v.segAt.length - 1, Math.floor(v.progress / SAMPLE_M))].id))
+    const kmh = cars.length ? Math.round((cars.reduce((a, v) => a + v.speed, 0) / cars.length) * 36) / 10 : 0
+    if (kmh > JAM_OPEN_KMH) return false // tramos lentos pero con flujo: aún no es una congestión
+    const nearOb = list.some((s) => s.pts.some((p) => dist(p, OBELISCO) < 350))
+    const detail = { via: nearOb ? `${name} (zona Obelisco)` : name, tramos: list.length, largo_m: Math.round(list.reduce((a, s) => a + s.length, 0)), vehiculos: cars.length, velocidad_kmh: kmh }
+    const { rows } = await pool.query(
+      `INSERT INTO alerts (kind, road_segment_id, geom, detail) SELECT 'congestion', $1, ST_LineInterpolatePoint(geom, 0.5), $2::jsonb FROM road_segments WHERE id = $1
+       ON CONFLICT DO NOTHING RETURNING id`, [worst.id, JSON.stringify(detail)])
+    this.jams.set(name, { alertId: rows[0]?.id ?? 0, calm: 0 })
+    this.log('critical', `Congestión en ${name}: ${cars.length} vehículos a ${kmh} km/h en ${detail.largo_m} m`)
+    return true
+  }
+
+  /** Propone a cada línea que cruza tramos congestionados un rodeo por la red vial (respeta sentido único). */
+  private async applyDetours() {
+    const blocked = new Set(this.jammed)
+    let sim = 0
+    for (const r of this.routes) {
+      const hits = r.segAt.map((s, i) => (blocked.has(s.id) ? i : -1)).filter((i) => i >= 0)
+      if (hits.length < 4) continue
+      const entry = Math.max(0, hits[0] * SAMPLE_M - 40), exit = Math.min(r.base.length, hits[hits.length - 1] * SAMPLE_M + 40)
+      const alt = this.graph.shortestPath(this.graph.nearestNode(r.base.at(entry).p), this.graph.nearestNode(r.base.at(exit).p), undefined, JAM_ON)
+      if (!alt) { if (!r.sim && !this.noDetour.has(r)) { this.noDetour.add(r); this.log('warn', `Sin desvío disponible para Línea ${r.code} (${r.direction})`) } continue }
+      const had = r.detour
+      r.active = new Path([...r.base.slice(0, entry), ...alt.pts, ...r.base.slice(exit, r.base.length)])
+      r.detour = { names: alt.names, extraM: Math.round(r.active.length - r.base.length), pts: alt.pts }
+      const fresh = !had || had.extraM !== r.detour.extraM // solo se avisa si el desvío es nuevo o cambió
+      if (r.sim) { if (fresh) sim++ }
+      else if (fresh) this.log('info', `Desvío sugerido Línea ${r.code} (${r.direction}): ${alt.names.slice(0, 4).join(' → ')} · ${r.detour.extraM >= 0 ? '+' : ''}${r.detour.extraM} m (~${Math.max(1, Math.round(r.detour.extraM / 300))} min)`)
+      // el tramo vial de cada 10 m solo cambia en el desvío: se reutiliza el de la ruta base antes y después (desfase < 10 m)
+      const segAt = [...r.segAt.slice(0, Math.floor(entry / SAMPLE_M)), ...this.sampleSegments(new Path(alt.pts)), ...r.segAt.slice(Math.ceil(exit / SAMPLE_M))]
+      r.activeSegAt = segAt
+      for (const v of this.vehicles) if (v.route === r && v.phase === 'ruta' && v.progress < entry && !v.offPlan) {
+        v.path = r.active; v.segAt = segAt; v.status = 'desvio_autorizado'
+      }
+    }
+    if (sim) this.log('info', `Desvío sugerido a ${sim} sentidos de líneas simuladas que cruzan el tramo congestionado`)
+    await this.syncStatus()
+  }
+
+  private clearDetours() {
+    this.noDetour.clear()
+    if (!this.routes.some((r) => r.detour)) return
+    for (const r of this.routes) { r.active = r.base; r.activeSegAt = r.segAt; r.detour = null }
+    this.log('ok', 'Se retiran los desvíos sugeridos')
   }
 
   // ---- alertas (PostGIS) ---------------------------------------------------------
@@ -192,11 +424,12 @@ export class Simulator {
            AND NOT EXISTS (
              SELECT 1 FROM vehicle_positions p WHERE p.vehicle_id = v.vehicle_id AND p.ts > now() - interval '3500 milliseconds'
                AND ST_DWithin(p.geom::geography, r.geom::geography, $1))),
-       stopped AS ( -- detenido: velocidad < 2 km/h durante $2 s, fuera de paradas y terminales
+       stopped AS ( -- detenido: velocidad < 2 km/h durante $2 s, fuera de paradas, terminales y colas de tráfico
          SELECT v.vehicle_id, v.geom FROM v
          WHERE (SELECT max(speed_kmh) FROM vehicle_positions p WHERE p.vehicle_id = v.vehicle_id AND p.ts > now() - make_interval(secs => $2)) < 2
            AND (SELECT min(ts) FROM vehicle_positions p WHERE p.vehicle_id = v.vehicle_id) < now() - make_interval(secs => $2)
-           AND NOT EXISTS (SELECT 1 FROM geofences g WHERE g.kind IN ('parada', 'terminal') AND ST_Intersects(g.geom, v.geom))),
+           AND NOT EXISTS (SELECT 1 FROM geofences g WHERE g.kind IN ('parada', 'terminal') AND ST_Intersects(g.geom, v.geom))
+           AND NOT EXISTS (SELECT 1 FROM vehicle_positions p WHERE p.vehicle_id = v.vehicle_id AND p.queued AND p.ts > now() - make_interval(secs => $2))),
        fence AS (   -- dentro de una geocerca restringida
          SELECT v.vehicle_id, v.geom, g.id gid, g.name FROM v JOIN geofences g ON g.kind = 'restringida' AND ST_Intersects(g.geom, v.geom)),
        cur AS (
@@ -227,7 +460,7 @@ export class Simulator {
       }
     }
     this.openAlerts = (await pool.query(
-      `SELECT a.id, a.kind, a.vehicle_id, a.road_segment_id, a.started_at, a.detail, v.plate, r.code
+      `SELECT a.id, a.kind, a.vehicle_id, a.road_segment_id, a.started_at, a.detail, ST_X(a.geom) lon, ST_Y(a.geom) lat, v.plate, r.code
        FROM alerts a LEFT JOIN vehicles v ON v.id = a.vehicle_id LEFT JOIN routes r ON r.id = v.route_id
        WHERE a.resolved_at IS NULL ORDER BY a.started_at DESC`)).rows
   }
@@ -236,8 +469,8 @@ export class Simulator {
 
   async scenario(id: string): Promise<string> {
     switch (id) {
-      case 'congestion': return this.congestPrado()
-      case 'despejar': return this.clearCongestion()
+      case 'congestion': return this.rushHour()
+      case 'despejar': return this.trafficControl()
       case 'desvio': return this.unauthorizedDetour()
       case 'averia': return this.breakdown()
       case 'geocerca': return this.enterPlaza()
@@ -246,53 +479,20 @@ export class Simulator {
     }
   }
 
-  /** Bloqueo del Prado (Av. 16 de Julio): alerta de congestión + desvío por la red vial del Centro. */
-  private async congestPrado() {
-    const blocked = [...this.graph.segments.values()].filter((s) => s.name === PRADO)
-    if (!blocked.length) throw new Error('no hay tramos de la Av. 16 de Julio en el grafo')
-    if (blocked[0].congestion >= 0.9) return 'El Prado ya está congestionado'
-    const ids = blocked.map((s) => s.id)
-    blocked.forEach((s) => (s.congestion = 0.95))
-    await pool.query(`UPDATE road_segments SET congestion = 0.95 WHERE id = ANY($1)`, [ids])
-    await pool.query(
-      `INSERT INTO alerts (kind, road_segment_id, geom, detail)
-       SELECT 'congestion', $1, ST_LineInterpolatePoint(geom, 0.5), $2::jsonb FROM road_segments WHERE id = $1
-       ON CONFLICT DO NOTHING`,
-      [ids[Math.floor(ids.length / 2)], JSON.stringify({ via: 'Av. 16 de Julio (El Prado)', tramos: ids.length })],
-    )
-    this.log('critical', `Congestión severa en Av. 16 de Julio (El Prado): ${ids.length} tramos saturados`)
-    const blockedSet = new Set(ids)
-    for (const r of this.routes) {
-      const hits = r.segAt.map((s, i) => (blockedSet.has(s.id) ? i : -1)).filter((i) => i >= 0)
-      if (!hits.length) continue
-      const entry = Math.max(0, hits[0] * SAMPLE_M - 40), exit = Math.min(r.base.length, hits[hits.length - 1] * SAMPLE_M + 40)
-      const from = this.graph.nearestNode(r.base.at(entry).p), to = this.graph.nearestNode(r.base.at(exit).p)
-      const alt = this.graph.shortestPath(from, to)
-      if (!alt) { this.log('warn', `Sin desvío disponible para Línea ${r.code} (${r.direction})`); continue }
-      const pts = [...r.base.slice(0, entry), ...alt.pts, ...r.base.slice(exit, r.base.length)]
-      r.active = new Path(pts)
-      r.detour = { names: alt.names, extraM: Math.round(r.active.length - r.base.length), pts: alt.pts }
-      const extraMin = Math.max(1, Math.round(r.detour.extraM / 300))
-      this.log('info', `Desvío sugerido Línea ${r.code} (${r.direction}): ${alt.names.slice(0, 4).join(' → ')} · ${r.detour.extraM >= 0 ? '+' : ''}${r.detour.extraM} m (~${extraMin} min)`)
-      const segAt = this.sampleSegments(r.active)
-      for (const v of this.vehicles) if (v.route === r && v.phase === 'ruta' && v.progress < entry && !v.offPlan) {
-        v.path = r.active; v.segAt = segAt; v.status = 'desvio_autorizado'
-      }
-    }
-    await this.syncStatus()
-    return 'Congestión simulada en El Prado'
+  /** Hora punta ahora: salen las unidades de refuerzo y la congestión se forma sola. */
+  private async rushHour() {
+    if (this.peak) return 'Ya hay una hora punta en curso'
+    const n = this.startPeak()
+    return n ? `Hora punta: ${n} minibuses de refuerzo salen hacia el Centro` : 'No hay unidades de refuerzo disponibles'
   }
 
-  private async clearCongestion() {
-    const jammed = [...this.graph.segments.values()].filter((s) => s.congestion > 0)
-    if (!jammed.length) return 'No hay congestión activa'
-    jammed.forEach((s) => (s.congestion = 0))
-    await pool.query(`UPDATE road_segments SET congestion = 0 WHERE congestion > 0`)
-    await pool.query(`UPDATE alerts SET resolved_at = now() WHERE kind = 'congestion' AND resolved_at IS NULL`)
-    for (const r of this.routes) { r.active = r.base; r.detour = null }
-    // los vehículos ya desviados terminan su tramo; los siguientes vuelven a la ruta habitual
-    this.log('ok', 'El Prado despejado: se retiran los desvíos y se normaliza el flujo')
-    return 'Congestión despejada'
+  /** Un agente de tránsito ordena el Obelisco: paradas más cortas y el refuerzo que no salió se queda en base. */
+  private async trafficControl() {
+    if (!this.jams.size && !this.peak) return 'No hay congestión activa'
+    this.controlUntil = this.now + 150
+    for (const v of this.vehicles) if (v.reserve && v.phase === 'reserva') v.releaseAt = 0
+    this.log('ok', 'Agente de tránsito en el Obelisco: paradas más cortas y el refuerzo pendiente se retiene en base')
+    return 'Control de tránsito activado'
   }
 
   private pick(code: string, pred: (v: Vehicle) => boolean = () => true) {
@@ -371,15 +571,15 @@ export class Simulator {
       const [lon, lat] = unproject(v.pos)
       const state = alertBy.get(v.id) ? 'alerta' : v.speed === 0 && v.breakdownUntil > this.now ? 'detenido'
         : v.status === 'desvio_autorizado' ? 'desvio' : v.speed < 2 ? 'congestion' : 'normal'
-      return { id: v.id, plate: v.plate, code: v.code, direction: v.route.direction, kind: v.kind, lon, lat, heading: Math.round(v.heading), speedKmh: Math.round(v.speed * 36) / 10, state, alert: alertBy.get(v.id) ?? null }
+      return { id: v.id, plate: v.plate, code: v.code, sim: v.route.sim, direction: v.route.direction, kind: v.kind, lon, lat, heading: Math.round(v.heading), speedKmh: Math.round(v.speed * 36) / 10, state, alert: alertBy.get(v.id) ?? null }
     })
-    const congested = [...this.graph.segments.values()].filter((s) => s.congestion > 0)
+    const congested = [...this.jammed].map((id) => this.graph.segments.get(id)!)
     return {
       t: new Date().toISOString(),
       vehicles,
-      alerts: this.openAlerts.map((a) => ({ id: a.id, kind: a.kind, vehicleId: a.vehicle_id, plate: a.plate, code: a.code, detail: a.detail, startedAt: a.started_at })),
+      alerts: this.openAlerts.map((a) => ({ id: a.id, kind: a.kind, vehicleId: a.vehicle_id, plate: a.plate, code: a.code, detail: a.detail, startedAt: a.started_at, lon: a.lon, lat: a.lat })),
       congestion: congested.map((s) => ({ id: s.id, level: s.congestion, coords: s.pts.map(unproject) })),
-      reroutes: this.routes.filter((r) => r.detour).map((r) => ({
+      reroutes: this.routes.filter((r) => r.detour && !r.sim).map((r) => ({
         code: r.code, direction: r.direction, via: r.detour!.names, extraM: r.detour!.extraM,
         extraMin: Math.max(1, Math.round(r.detour!.extraM / 300)), coords: r.detour!.pts.map(unproject),
       })),
@@ -388,6 +588,8 @@ export class Simulator {
         avgSpeedKmh: live.length ? Math.round((live.reduce((s, v) => s + v.speed, 0) / live.length) * 36) / 10 : 0,
         alerts: this.openAlerts.length,
         congestedSegments: congested.length,
+        peak: this.peak != null,
+        reserveOut: this.vehicles.filter((v) => v.reserve && v.phase === 'ruta').length,
       },
       events: this.events,
     }

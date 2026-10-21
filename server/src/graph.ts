@@ -45,21 +45,38 @@ export class RoadGraph {
 
   /**
    * Camino más corto respetando sentido único. Coste = longitud × (1 + 8·congestión) × penalización.
-   * Los tramos con congestión ≥ 0.9 se consideran bloqueados.
+   * Los tramos con congestión ≥ blockAt (0.9 por defecto) se consideran bloqueados.
    */
-  shortestPath(from: number, to: number, penalty: (s: Segment) => number = () => 1) {
+  shortestPath(from: number, to: number, penalty: (s: Segment) => number = () => 1, blockAt = 0.9) {
     const d = new Map<number, number>([[from, 0]])
     const prev = new Map<number, Edge & { from: number }>()
-    const open = new Set([from])
-    while (open.size) {
-      let u = -1
-      for (const n of open) if (u < 0 || d.get(n)! < d.get(u)!) u = n
-      open.delete(u)
+    const heap: [number, number][] = [[0, from]] // cola de prioridad (dist, nodo) con eliminación perezosa
+    const push = (item: [number, number]) => {
+      let i = heap.push(item) - 1
+      while (i > 0 && heap[(i - 1) >> 1][0] > heap[i][0]) { const p = (i - 1) >> 1; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p }
+    }
+    const pop = () => {
+      const top = heap[0], last = heap.pop()!
+      if (heap.length) {
+        heap[0] = last
+        for (let i = 0; ; ) {
+          let m = i; const l = 2 * i + 1, r = l + 1
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r
+          if (m === i) break
+          ;[heap[m], heap[i]] = [heap[i], heap[m]]; i = m
+        }
+      }
+      return top
+    }
+    while (heap.length) {
+      const [du, u] = pop()
+      if (du > d.get(u)!) continue
       if (u === to) break
       for (const e of this.adj.get(u) ?? []) {
-        if (e.seg.congestion >= 0.9) continue
-        const nd = d.get(u)! + e.seg.length * (1 + 8 * e.seg.congestion) * penalty(e.seg)
-        if (nd < (d.get(e.to) ?? Infinity)) { d.set(e.to, nd); prev.set(e.to, { ...e, from: u }); open.add(e.to) }
+        if (e.seg.congestion >= blockAt) continue
+        const nd = du + e.seg.length * (1 + 8 * e.seg.congestion) * penalty(e.seg)
+        if (nd < (d.get(e.to) ?? Infinity)) { d.set(e.to, nd); prev.set(e.to, { ...e, from: u }); push([nd, e.to]) }
       }
     }
     if (!prev.has(to)) return null

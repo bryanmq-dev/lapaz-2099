@@ -11,7 +11,7 @@ export const pool = new pg.Pool({
   max: 6,
 })
 
-const data = (f: string) => JSON.parse(readFileSync(join(DATA_DIR, f), 'utf8'))
+export const data = (f: string) => JSON.parse(readFileSync(join(DATA_DIR, f), 'utf8'))
 
 /** Aplica en orden las migraciones SQL pendientes. */
 export async function migrate() {
@@ -37,13 +37,44 @@ export async function migrate() {
 
 // ---- datos ficticios de la flota (los choferes y las placas NO son reales) ----------------
 
-const FIRST = ['Juan', 'Marco', 'Rubén', 'Elías', 'Wilfredo', 'Freddy', 'Germán', 'Simón', 'Edwin', 'Hugo', 'Rolando', 'Javier', 'Néstor', 'Ramiro', 'Grover', 'Lidia', 'Rosa', 'Julia', 'Ana', 'Celia']
-const LAST = ['Mamani', 'Quispe', 'Condori', 'Choque', 'Flores', 'Apaza', 'Huanca', 'Limachi', 'Ticona', 'Callisaya', 'Poma', 'Chura', 'Gutiérrez', 'Vargas', 'Rojas', 'Laura']
-const LETTERS = 'BCDFGHJKLMNPRSTVWXYZ'
+export const FIRST = ['Juan', 'Marco', 'Rubén', 'Elías', 'Wilfredo', 'Freddy', 'Germán', 'Simón', 'Edwin', 'Hugo', 'Rolando', 'Javier', 'Néstor', 'Ramiro', 'Grover', 'Lidia', 'Rosa', 'Julia', 'Ana', 'Celia']
+export const LAST = ['Mamani', 'Quispe', 'Condori', 'Choque', 'Flores', 'Apaza', 'Huanca', 'Limachi', 'Ticona', 'Callisaya', 'Poma', 'Chura', 'Gutiérrez', 'Vargas', 'Rojas', 'Laura']
+export const LETTERS = 'BCDFGHJKLMNPRSTVWXYZ'
 
-function rng(seed: number) {
+export function rng(seed: number) {
   let a = seed
   return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
+}
+
+/** Paradas de referencia: inicio y fin del tramo + lugares conocidos a ≤ 120 m de la ruta (PostGIS). */
+export async function addStops(client: pg.PoolClient, landmarks: any[], codes: string[] | null = null) {
+  await client.query(
+    `WITH lm AS (SELECT * FROM json_to_recordset($1::json) AS x(label text, lon float8, lat float8)),
+     rt AS (SELECT * FROM routes WHERE $2::text[] IS NULL OR code = ANY($2)),
+     cand AS (
+       SELECT r.id route_id, 'Ingreso al Centro' AS name, ST_StartPoint(r.geom) g FROM rt r
+       UNION ALL SELECT r.id, 'Salida del Centro', ST_EndPoint(r.geom) FROM rt r
+       UNION ALL SELECT r.id, lm.label, ST_ClosestPoint(r.geom, ST_SetSRID(ST_MakePoint(lm.lon, lm.lat), 4326))
+         FROM rt r JOIN lm ON ST_DWithin(r.geom::geography, ST_SetSRID(ST_MakePoint(lm.lon, lm.lat), 4326)::geography, 120))
+     INSERT INTO stops (route_id, seq, name, geom, measure)
+     SELECT cand.route_id, row_number() OVER (PARTITION BY cand.route_id ORDER BY ST_LineLocatePoint(r.geom, cand.g)),
+            cand.name, cand.g, ST_LineLocatePoint(r.geom, cand.g)
+     FROM cand JOIN routes r ON r.id = cand.route_id`,
+    [JSON.stringify(landmarks.map((l: any) => ({ label: l.label, lon: l.at[0], lat: l.at[1] }))), codes],
+  )
+}
+
+/** Geocercas de parada y terminal para las paradas que aún no tienen una. */
+export async function addStopFences(client: pg.PoolClient) {
+  await client.query(
+    `INSERT INTO geofences (name, kind, max_dwell_s, geom)
+     SELECT s.name || ' · ' || r.code || ' ' || r.direction, CASE WHEN s.name LIKE '%Centro' THEN 'terminal' ELSE 'parada' END::geofence_kind,
+            CASE WHEN s.name LIKE '%Centro' THEN 300 ELSE 90 END,
+            ST_Buffer(s.geom::geography, CASE WHEN s.name LIKE '%Centro' THEN 45 ELSE 30 END)::geometry
+     FROM stops s JOIN routes r ON r.id = s.route_id
+     WHERE NOT EXISTS (SELECT 1 FROM geofences g WHERE g.name = s.name || ' · ' || r.code || ' ' || r.direction)
+     ORDER BY r.code, r.direction, s.seq`,
+  )
 }
 
 /** Vehículos por línea (simulación; ver docs/caso-estudio-rutas.md). */
@@ -68,20 +99,7 @@ export async function seed() {
       )
     }
 
-    // Paradas de referencia: inicio y fin del tramo + lugares conocidos a ≤ 120 m de la ruta (PostGIS).
-    await client.query(
-      `WITH lm AS (SELECT * FROM json_to_recordset($1::json) AS x(label text, lon float8, lat float8)),
-       cand AS (
-         SELECT r.id route_id, 'Ingreso al Centro' AS name, ST_StartPoint(r.geom) g FROM routes r
-         UNION ALL SELECT r.id, 'Salida del Centro', ST_EndPoint(r.geom) FROM routes r
-         UNION ALL SELECT r.id, lm.label, ST_ClosestPoint(r.geom, ST_SetSRID(ST_MakePoint(lm.lon, lm.lat), 4326))
-           FROM routes r JOIN lm ON ST_DWithin(r.geom::geography, ST_SetSRID(ST_MakePoint(lm.lon, lm.lat), 4326)::geography, 120))
-       INSERT INTO stops (route_id, seq, name, geom, measure)
-       SELECT cand.route_id, row_number() OVER (PARTITION BY cand.route_id ORDER BY ST_LineLocatePoint(r.geom, cand.g)),
-              cand.name, cand.g, ST_LineLocatePoint(r.geom, cand.g)
-       FROM cand JOIN routes r ON r.id = cand.route_id`,
-      [JSON.stringify(landmarks.map((l: any) => ({ label: l.label, lon: l.at[0], lat: l.at[1] })))],
-    )
+    await addStops(client, landmarks)
 
     await client.query(
       `INSERT INTO road_segments (id, osm_way_id, name, highway, oneway, source, target, length_m, geom)
@@ -97,13 +115,7 @@ export async function seed() {
         ST_SetSRID(ST_GeomFromGeoJSON($1), 4326))`,
       [JSON.stringify({ type: 'Polygon', coordinates: [[...murillo.pts, murillo.pts[0]]] })],
     )
-    await client.query(
-      `INSERT INTO geofences (name, kind, max_dwell_s, geom)
-       SELECT s.name || ' · ' || r.code || ' ' || r.direction, CASE WHEN s.name LIKE '%Centro' THEN 'terminal' ELSE 'parada' END::geofence_kind,
-              CASE WHEN s.name LIKE '%Centro' THEN 300 ELSE 90 END,
-              ST_Buffer(s.geom::geography, CASE WHEN s.name LIKE '%Centro' THEN 45 ELSE 30 END)::geometry
-       FROM stops s JOIN routes r ON r.id = s.route_id ORDER BY r.code, r.direction, s.seq`,
-    )
+    await addStopFences(client)
     await client.query(
       `WITH sc AS (SELECT * FROM json_to_recordset($1::json) AS x(name text, lon float8, lat float8)),
        near AS (SELECT DISTINCT ON (sc.name) sc.*, ST_Distance(r.geom::geography, ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography) d
