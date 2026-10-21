@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: lapaz
+      POSTGRES_PASSWORD: lapaz
+      POSTGRES_DB: lapaz
+    ports:
+      - "5433:5432" # 5433 en el host para no chocar con un PostgreSQL local
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lapaz -d lapaz"]
+      interval: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      DATABASE_URL: postgres://lapaz:lapaz@db:5432/lapaz
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  web:
+    build: .
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:
