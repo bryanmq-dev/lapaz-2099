@@ -40,4 +40,4 @@ export const SCENE = {
 } as const
 
 /** Flota simulada: gris en oscuro (se lee sobre el mapa oscuro) y negro en claro. Las líneas reales conservan su color. */
-export const FILLER_BUS = { dark: '#9db4c8', light: '#0b0f14' } as const
+export const FILLER_BUS = { dark: '#9dc4f8', light: '#0b0fa4' } as const
