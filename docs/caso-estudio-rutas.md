@@ -95,14 +95,27 @@ Fuente: [Correo del Sur, 25-dic-2025](https://correodelsur.com/sociedad/20251225
   - las 3 unidades educativas reales más cercanas a las rutas, como zonas escolares.
 - **Reglas de alerta**, evaluadas cada segundo en una sola consulta SQL (`server/src/sim.ts`):
   - *fuera de ruta*: 3 muestras seguidas a más de 40 m de la ruta asignada (`ST_DWithin` sobre `geography`), salvo en un desvío autorizado;
-  - *detenido*: < 2 km/h durante 45 s fuera de paradas y terminales;
-  - *geocerca*: `ST_Intersects` con una geocerca restringida.
-- **Desvíos**: Dijkstra sobre `road_segments`, con coste = longitud × (1 + 8·congestión). Respeta el sentido único y no sale del recuadro del Centro.
+  - *detenido*: < 2 km/h durante 45 s fuera de paradas, terminales y colas de tráfico (los vehículos en cola quedan marcados en `vehicle_positions.queued`);
+  - *geocerca*: `ST_Intersects` con una geocerca restringida;
+  - *congestión*: se mide en la simulación (ver abajo) y se guarda en `alerts` con el tramo más lento de la calle.
+- **Desvíos**: Dijkstra (con cola de prioridad) sobre `road_segments`, con coste = longitud × (1 + 8·congestión); los tramos congestionados se evitan. Respeta el sentido único y no sale del recuadro del Centro.
+
+## Flota simulada y tráfico emergente
+
+Además de las 3 líneas reales hay **28 líneas simuladas** (`S01`…`S28`, `server/src/fleet.ts`) para poblar el Centro: **224 minibuses en servicio** (más los 18 minibuses y 8 trufis de las líneas reales) y **50 unidades de refuerzo**.
+
+- Las rutas son el camino más corto por avenidas entre plazas y bordes del recuadro, sobre la red vial real y respetando los sentidos únicos. **No son líneas reales**: no existen en OSM ni tienen operador conocido. Los choferes y las placas son ficticios, como en las líneas reales.
+- 14 de ellas cruzan el **Obelisco** por tres accesos: **El Prado** (Av. 16 de Julio), la **Av. Mcal. Santa Cruz** y la **Av. Camacho**. Las otras 14 no pasan por él.
+- **La congestión no se impone, se mide.** Cada minibús sigue al vehículo de delante (modelo de Krauss: aceleración 1,2 m/s², frenada 3 m/s²) y se detiene dentro del carril en las paradas; un semáforo en el Obelisco reparte el paso entre el Prado y la Camacho. Si pasan más minibuses de los que caben, se forma cola, como en la calle.
+- **Hora punta**: las 50 unidades de refuerzo salen de plazas a menos de 1 km del Obelisco y llegan al corredor repartidas en unos 90 s. Se dispara sola al iniciar y cada 8 min, o con el botón «Hora punta en El Prado». En la prueba, la cola llega a ~20 vehículos en el Prado y ~12 en la Camacho, y se disuelve sola en unos 7 minutos.
+- **Alerta de congestión**: una calle con ≥ 150 m de tramos lentos durante 12 s y velocidad media < 9 km/h abre una alerta (se cierra tras 25 s de flujo normal). Al abrirse se proponen desvíos a las líneas que cruzan el tramo; al cerrarse, se retiran.
+- «Despejar El Prado» simula a un agente de tránsito: paradas más cortas, más verde para el Prado y el refuerzo que aún no salió se queda en base.
 
 ## Supuestos de la simulación
 
-- Flota: 10 vehículos en la 212, 8 en la 204 y 8 en la 453, repartidos entre ida y vuelta.
-- Velocidad de crucero: 20 km/h (minibús) y 18 km/h (trufi), reducida por la congestión de cada tramo.
+- Flota: 10 vehículos en la 212, 8 en la 204 y 8 en la 453, repartidos entre ida y vuelta; más la flota simulada descrita arriba.
+- Velocidad libre: ≈ 20 km/h (minibús) y 18 km/h (trufi), con una variación de ±10 % por vehículo. La velocidad real la fijan el vehículo de delante, las paradas y el semáforo.
+- El semáforo del Obelisco (ciclo de 62 s, 30 s para el Prado y 26 s para la Camacho) y las paradas en el carril son supuestos: no hay datos públicos de sus tiempos.
 - Al terminar su tramo dentro del Centro, el vehículo pasa 40 s fuera de la zona (el resto del recorrido, que no se dibuja) y vuelve en el sentido contrario.
 - Las alturas de los edificios sin dato en OSM y los 22.970 lotes de relleno son estimaciones, más altas junto al eje del Prado.
 

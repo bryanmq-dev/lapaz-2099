@@ -3,9 +3,9 @@
 Gemelo digital de La Paz con dos vistas:
 
 1. **Ciudad**: visión conceptual de toda la ciudad (simulación en el navegador).
-2. **Centro**: el Centro reconstruido con datos reales de OpenStreetMap y elevación SRTM. Muestra el seguimiento de 3 líneas reales de minibús y trufi, con alertas espaciales en PostGIS y desvíos sugeridos dentro de la zona.
+2. **Centro**: el Centro reconstruido con datos reales de OpenStreetMap y elevación SRTM. Muestra el seguimiento de 3 líneas reales de minibús y trufi y de una flota simulada de ~250 minibuses, con alertas espaciales en PostGIS, congestión que se forma sola en El Prado, el Obelisco y la Av. Camacho, y desvíos sugeridos dentro de la zona.
 
-Todos los datos de flota, tráfico y alertas son **simulados**. Ver [docs/caso-estudio-rutas.md](docs/caso-estudio-rutas.md) y [CHANGELOG.md](CHANGELOG.md).
+Todos los datos de flota, tráfico y alertas son **simulados**. Ver [docs/caso-estudio-rutas.md](docs/caso-estudio-rutas.md), [docs/explicacion-tecnica.md](docs/explicacion-tecnica.md) (cómo funciona todo, de punta a punta) y [CHANGELOG.md](CHANGELOG.md).
 
 ## Ejecutar
 
