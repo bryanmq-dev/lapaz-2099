@@ -1,6 +1,7 @@
 services:
   db:
     image: postgis/postgis:17-3.5
+    container_name: techpaz-db
     environment:
       POSTGRES_USER: lapaz
       POSTGRES_PASSWORD: lapaz
@@ -11,8 +12,11 @@ services:
       test: ["CMD-SHELL", "pg_isready -U lapaz -d lapaz"]
       interval: 3s
       retries: 20
+    networks:
+      - techpaz
 
   api:
+    container_name: techpaz-api
     build:
       context: .
       dockerfile: server/Dockerfile
@@ -21,11 +25,21 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
+    networks:
+      - techpaz
+      
   web:
+    container_name: techpaz-web
     build: .
     depends_on:
       - api
+    networks:
+      - techpaz
+      
+networks:
+  techpaz:
+    driver: bridge
+    internal: true
 
 volumes:
   pgdata:
