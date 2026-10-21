@@ -235,6 +235,13 @@ SSE y no WebSocket porque el flujo es unidireccional (servidor → cliente) y `E
 - **Clic en el anuncio o en la alerta de una congestión**: la cámara vuela al punto (`CameraRig`: interpolación exponencial de objetivo y posición, a ~420 m, con la misma orientación que la vista general). El punto viene de `alerts.geom` (`ST_X/ST_Y`) a través del stream. El botón «Ver en el mapa» hace lo mismo con teclado.
 - «Vista general» devuelve la cámara al inicio y cancela cualquier vuelo.
 
+**Modo claro y oscuro.** `src/theme.ts` guarda el tema (`localStorage`, con `try/catch` por si el navegador lo bloquea) y lo aplica como `data-theme` en `<html>`; el oscuro es el predeterminado. Hay dos capas:
+- **Interfaz**: todo el CSS usa variables (`--panel-a`, `--text`, `--btn-red`…). `:root[data-theme="light"]` redefine solo esas variables, así que no hay una hoja de estilos paralela.
+- **Escenas 3D** (`SCENE` en `theme.ts`): cielo, niebla, luces, terreno, edificios, calles, parques y geocercas cambian de paleta con `useTheme()`. El terreno y los edificios llevan el color en los vértices, así que se **regeneran** al cambiar de tema; el cielo solo actualiza sus uniformes. De día los edificios no tienen ventanas encendidas (se oscurecen los vidrios) y las geocercas dejan la mezcla aditiva, que no se ve sobre fondo claro.
+- **Buses**: las 3 líneas reales conservan su color en ambos temas. La flota simulada (la de relleno que provoca la congestión) es gris en oscuro y **negra en claro** (`FILLER_BUS`).
+
+**Ocultar paneles.** El botón de la cabecera (igual que en la vista Ciudad) añade `hud-min`, que oculta las columnas laterales y los KPIs y deja la barra de escenarios, el anuncio de congestión y la cabecera. En móvil los paneles ya van ocultos y el botón no se muestra.
+
 **Responsive.** En ≤ 720 px se ocultan los paneles laterales, el encabezado se compacta y los 4 escenarios pasan a una cuadrícula de 2 columnas sobre un fondo casi opaco. En ≤ 1050 px se oculta el panel derecho. Los botones del Centro tienen fondo casi sólido para leerse sobre el mapa.
 
 **Vista Ciudad.** Aparte, `src/simulation/simulationEngine.ts` es un motor determinista por pasos (siete distritos, KPIs derivados, incidente con fases de detección, respuesta y recuperación, y Dijkstra sobre un grafo de avenidas para la ruta alterna). Se comprueba con `pnpm check:sim`.

@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { OrbitControls as OrbitControlsImpl } from 'three/examples/jsm/controls/OrbitControls.js'
 import { PALETTE, reducedMotion, ribbon } from '../city/shared'
+import { FILLER_BUS, getTheme, useTheme } from '../theme'
 import { project, type LL, type LineInfo } from './data'
 import { drape, type HeightFn } from './geometry'
 import { fleet, vehiclePos, type Snapshot } from './useFleet'
@@ -14,7 +15,7 @@ const MAX = 400 // ponytail: ~330 vehículos con la hora punta; subir si la flot
 const o = new THREE.Object3D()
 const c = new THREE.Color()
 const RED = new THREE.Color(PALETTE.red), AMBER = new THREE.Color(PALETTE.amber), GREEN = new THREE.Color(PALETTE.green)
-const FLEET_GREY = new THREE.Color('#9db4c8') // flota simulada: se distingue de las 3 líneas reales con color propio
+const FILLER = { dark: new THREE.Color(FILLER_BUS.dark), light: new THREE.Color(FILLER_BUS.light) } // flota simulada: se distingue de las 3 líneas reales
 
 export function Vehicles({ height, lines, hidden, selected, onSelect }: {
   height: HeightFn; lines: LineInfo[]; hidden: Set<string>; selected: number | null; onSelect: (id: number | null) => void
@@ -52,7 +53,7 @@ export function Vehicles({ height, lines, hidden, selected, onSelect }: {
       o.scale.set(trufi ? 2.2 : 2.6, trufi ? 1.9 : 2.7, trufi ? 5 : 7.5).multiplyScalar(1.6) // ponytail: exageración ×1.6 para que se lean a escala ciudad
       o.updateMatrix()
       bodies.current!.setMatrixAt(i, o.matrix)
-      const base = lineColor.get(v.code) ?? FLEET_GREY
+      const base = lineColor.get(v.code) ?? FILLER[getTheme()]
       if (v.state === 'alerta') c.copy(RED).multiplyScalar(0.55 + 0.45 * Math.sin(t * 9))
       else if (v.state === 'detenido') c.copy(AMBER)
       else if (v.state === 'desvio') c.copy(GREEN)
@@ -144,6 +145,7 @@ export interface Geofence { id: number; name: string; kind: 'restringida' | 'par
 
 /** Geocercas como volúmenes translúcidos (restringidas en rojo, escolares en ámbar). */
 export function Geofences({ list, height, alerted }: { list: Geofence[]; height: HeightFn; alerted: boolean }) {
+  const light = useTheme() === 'light'
   const walls = useMemo(() => {
     const build = (kind: Geofence['kind'], h: number) => {
       const pos: number[] = []
@@ -161,14 +163,14 @@ export function Geofences({ list, height, alerted }: { list: Geofence[]; height:
     return { restricted: build('restringida', 30), school: build('escolar', 14) }
   }, [list, height])
   const mat = useRef<THREE.MeshBasicMaterial>(null)
-  useFrame(() => { if (mat.current) mat.current.opacity = alerted ? 0.3 + 0.2 * Math.sin(performance.now() / 160) : 0.22 })
+  useFrame(() => { if (mat.current) mat.current.opacity = (alerted ? 0.3 + 0.2 * Math.sin(performance.now() / 160) : 0.22) * (light ? 1.4 : 1) })
   return (
     <group>
       <mesh geometry={walls.restricted} raycast={() => null}>
-        <meshBasicMaterial ref={mat} color={PALETTE.red} transparent opacity={0.22} side={THREE.DoubleSide} depthWrite={false} toneMapped={false} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial ref={mat} color={PALETTE.red} transparent opacity={0.22} side={THREE.DoubleSide} depthWrite={false} toneMapped={false} blending={light ? THREE.NormalBlending : THREE.AdditiveBlending} />
       </mesh>
       <mesh geometry={walls.school} raycast={() => null}>
-        <meshBasicMaterial color={PALETTE.amber} transparent opacity={0.16} side={THREE.DoubleSide} depthWrite={false} toneMapped={false} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color={PALETTE.amber} transparent opacity={light ? 0.25 : 0.16} side={THREE.DoubleSide} depthWrite={false} toneMapped={false} blending={light ? THREE.NormalBlending : THREE.AdditiveBlending} />
       </mesh>
     </group>
   )

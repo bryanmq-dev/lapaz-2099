@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, MapPin, RefreshCw, Siren } from 'lucide-react'
+import { ArrowLeft, MapPin, PanelsTopLeft, RefreshCw, Siren } from 'lucide-react'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { setView } from '../view'
 import { AlertsPanel, Events, Kpis, Lines, ScenarioBar, VehiclePanel, type VehicleDetail } from './CentroPanel'
 import { CentroScene } from './CentroScene'
@@ -38,6 +39,7 @@ export function CentroView() {
   const [follow, setFollow] = useState(true)
   const [homeSeq, setHomeSeq] = useState(0)
   const [focusAt, setFocusAt] = useState<{ ll: LL; seq: number } | null>(null)
+  const [panels, setPanels] = useState(true)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const { snap, status, retry } = useFleet()
@@ -76,7 +78,7 @@ export function CentroView() {
       )}
       {!data && <div className="loading">{error ? `No se pudieron cargar los datos del Centro: ${error}` : 'Cargando el Centro de La Paz…'}</div>}
 
-      <div className="hud hud-centro">
+      <div className={`hud hud-centro ${panels ? '' : 'hud-min'}`}>
         <header className="top">
           <div className="brand">
             <button className="icon-btn" title="Volver a la vista ciudad" aria-label="Volver a la vista ciudad" onClick={() => setView('city')}>
@@ -91,6 +93,12 @@ export function CentroView() {
             <span className={`api api-${status}`}><i />{status === 'live' ? 'API EN VIVO' : status === 'connecting' ? 'CONECTANDO…' : 'API SIN CONEXIÓN'}</span>
             <span className="demo"><i />DEMO · SIMULACIÓN</span>
             <div className="clock"><small>HORA LA PAZ</small><b>{clock}</b></div>
+            <div className="tools">
+              <ThemeToggle />
+              <button className="icon-btn panels-toggle" aria-pressed={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>
+                <PanelsTopLeft size={17} />
+              </button>
+            </div>
           </div>
         </header>
 

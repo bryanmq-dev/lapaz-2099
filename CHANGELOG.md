@@ -2,6 +2,20 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado semántico.
 
+## [0.4.0] — 2026-10-21
+
+Modo claro en toda la aplicación y paneles ocultables en la vista del Centro.
+
+### Agregado
+- **Modo claro / oscuro** con un botón sol/luna en las cabeceras de la vista ciudad y del Centro. La elección se recuerda (`localStorage`); el oscuro sigue siendo el predeterminado.
+  - La interfaz usa variables CSS; el modo claro solo las redefine.
+  - Las escenas 3D tienen paleta clara: cielo, niebla, luces, terreno, edificios (sin ventanas encendidas de día), calles, parques, plazas y geocercas.
+  - Los buses de las líneas reales **conservan su color**; los buses de relleno de la flota simulada pasan a **negro** en modo claro (siguen grises en oscuro).
+- **Ocultar paneles** en la vista del Centro, con el mismo botón que la vista ciudad (`hud-min`). Se deja a la vista la cabecera, los escenarios y el anuncio de congestión.
+
+### Corregido
+- En móvil, los botones de la cabecera de la vista ciudad (paneles y pantalla completa) se salían de la pantalla: ahora la cabecera hace salto de línea.
+
 ## [0.3.0] — 2026-10-21
 
 Flota simulada de más de 240 minibuses, hora punta con congestión emergente en El Prado, el Obelisco y la Av. Camacho, y vista del Centro adaptada a móvil.

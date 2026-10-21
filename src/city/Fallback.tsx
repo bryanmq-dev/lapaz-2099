@@ -16,7 +16,7 @@ export function Fallback() {
         {DISTRICTS.map((d, i) => (
           <g key={d.id} onClick={() => sim.dispatch({ type: 'select', id: d.id })} style={{ cursor: 'pointer' }}>
             <circle cx={d.pos[0]} cy={d.pos[1]} r={d.radius} fill={COLOR[v.districts[i].level]} fillOpacity={v.state.selectedId === d.id ? 0.35 : 0.15} stroke={COLOR[v.districts[i].level]} strokeWidth={0.6} />
-            <text x={d.pos[0]} y={d.pos[1] + 1} textAnchor="middle" fontSize={3.2} fill="#e8f1fa">{d.name}</text>
+            <text x={d.pos[0]} y={d.pos[1] + 1} textAnchor="middle" fontSize={3.2} style={{ fill: 'var(--text)' }}>{d.name}</text>
           </g>
         ))}
       </svg>

@@ -8,6 +8,7 @@ import { setView } from '../view'
 import type { DistrictStatus, IncidentPhase, Level, SimView } from '../simulation/types'
 import { ControlPanel } from './ControlPanel'
 import { EventFeed } from './EventFeed'
+import { ThemeToggle } from './ThemeToggle'
 import { MetricCard } from './MetricCard'
 
 const trafficLabel = (v: number) => (v < 40 ? 'Fluido' : v < 60 ? 'Moderado' : v < 80 ? 'Denso' : 'Saturado')
@@ -114,6 +115,7 @@ export function Dashboard({ view }: { view: SimView }) {
           </button>
           <span className="demo"><i />DEMO · SIMULACIÓN</span>
           <div className="clock"><small>HORA SIM.</small><b>{view.clock}</b></div>
+          <ThemeToggle />
           <button className="icon-btn" aria-pressed={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>
             <PanelsTopLeft size={17} />
           </button>
