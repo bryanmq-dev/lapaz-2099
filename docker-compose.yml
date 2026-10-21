@@ -5,8 +5,6 @@ services:
       POSTGRES_USER: lapaz
       POSTGRES_PASSWORD: lapaz
       POSTGRES_DB: lapaz
-    ports:
-      - "5433:5432" # 5433 en el host para no chocar con un PostgreSQL local
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,15 +21,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "3001:3001"
 
   web:
     build: .
     depends_on:
       - api
-    ports:
-      - "8080:80"
 
 volumes:
   pgdata:
