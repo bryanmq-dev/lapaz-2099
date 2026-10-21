@@ -1,0 +1,44 @@
+[
+  {
+    "code": "212",
+    "mode": "minibus",
+    "union": "Sindicato COTRANSTUR",
+    "color": "#00D5FF",
+    "termini": "Plaza Isabel la Católica ↔ Aeropuerto Internacional El Alto",
+    "corridor": "Av. Arce → Av. Villazón → Av. 16 de Julio (El Prado) → Av. Mcal. Santa Cruz → Av. Montes → Autopista",
+    "fare": "Bs 3,00 tramo corto · Bs 3,50 tramo largo (diurna); Bs 3,30 / 3,80 nocturna",
+    "schedule": "05:30–22:30 aprox.",
+    "headway": "8–12 min",
+    "headwayMin": 10,
+    "notes": "Línea más documentada del caso: conecta el aeropuerto con el Prado. La vuelta entra por Av. 6 de Agosto y Calle Pedro Salazar.",
+    "assumed": []
+  },
+  {
+    "code": "204",
+    "mode": "minibus",
+    "union": "Sindicato Pedro Domingo Murillo",
+    "color": "#FFB547",
+    "termini": "Jurisdicción El Alto ↔ Calle 8, Villa El Carmen",
+    "corridor": "Ida: Garita de Lima → Av. Tumusla → Plaza Eguino → Murillo → Oruro → Ayacucho → Av. Camacho → Miraflores · Vuelta: Tejada Sorzano → Ballivián → Ingavi → Viaducto San Francisco → Max Paredes → Garita de Lima",
+    "fare": "Bs 3,00 tramo corto · Bs 3,50 tramo largo (diurna)",
+    "schedule": "06:00–22:00 (supuesto)",
+    "headway": "10–15 min (supuesto)",
+    "headwayMin": 12,
+    "notes": "Atraviesa el Casco Viejo junto a Plaza Murillo (calles Ballivián, Ingavi y Ayacucho). En OSM la relación de vuelta tiene ref=208 aunque su nombre dice 204; se usa 204.",
+    "assumed": ["schedule", "headway"]
+  },
+  {
+    "code": "453",
+    "mode": "trufi",
+    "union": "Sindicato de Transporte Eduardo Avaroa",
+    "color": "#B39CFF",
+    "termini": "San Pedro (Calle México / Otero de la Vega) ↔ Cruce Viacha",
+    "corridor": "Ida: Otero de la Vega → Plaza Israel → Boquerón → Plaza El Cóndor → Av. Landaeta · Vuelta: Av. Buenos Aires → Landaeta → Plaza El Cóndor → Boquerón → Canónigo Ayllón → Héroes del Acre → México",
+    "fare": "Trufi: Bs 2,50 zonal corto · Bs 4,00 tramo largo · Bs 4,50 extra largo",
+    "schedule": "06:00–21:30 (supuesto)",
+    "headway": "6–10 min (supuesto)",
+    "headwayMin": 8,
+    "notes": "Trufi de barrio que termina en San Pedro; recorrido corto dentro del Centro, útil para contrastar con los minibuses troncales.",
+    "assumed": ["schedule", "headway"]
+  }
+]
