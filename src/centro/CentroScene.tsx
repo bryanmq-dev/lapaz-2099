@@ -72,10 +72,10 @@ function Routes({ data, height, hidden, focus }: { data: CentroData; height: Hei
 
 export interface SceneProps {
   data: CentroData; snap: Snapshot | null; selected: number | null; onSelect: (id: number | null) => void
-  hidden: Set<string>; follow: boolean; homeSeq: number; track: LL[]; geofences: Geofence[]
+  hidden: Set<string>; follow: boolean; homeSeq: number; focusAt: { ll: LL; seq: number } | null; track: LL[]; geofences: Geofence[]
 }
 
-export function CentroScene({ data, snap, selected, onSelect, hidden, follow, homeSeq, track, geofences }: SceneProps) {
+export function CentroScene({ data, snap, selected, onSelect, hidden, follow, homeSeq, focusAt, track, geofences }: SceneProps) {
   const height = useMemo(() => makeHeight(data.elevation), [data.elevation])
   const home = useMemo(() => {
     const [x, z] = project([-68.1365, -16.4995]) // centro del recuadro (Prado / Casco Viejo)
@@ -102,7 +102,7 @@ export function CentroScene({ data, snap, selected, onSelect, hidden, follow, ho
       {selected != null && <Trail track={track} height={height} />}
       <OrbitControls makeDefault enableDamping dampingFactor={0.08} target={home.target.toArray()}
         minDistance={60} maxDistance={6000} maxPolarAngle={Math.PI * 0.47} />
-      <CameraRig selected={selected} follow={follow} homeSeq={homeSeq} home={home} height={height} />
+      <CameraRig selected={selected} follow={follow} homeSeq={homeSeq} focusAt={focusAt} home={home} height={height} />
     </Canvas>
   )
 }

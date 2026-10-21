@@ -279,3 +279,52 @@ ul, ol { list-style: none; margin: 0; padding: 0; }
 .icon-btn.wide { width: auto; padding: 0 12px; gap: 8px; display: inline-flex; align-self: flex-start; font-size: 12px; }
 .hud-centro .col-right .events { min-height: 120px; }
 .detail-cta { width: 100%; justify-content: center; margin-top: 12px; }
+
+/* botones del Centro: fondo casi sólido para que se lean sobre el mapa 3D */
+.hud-centro .icon-btn { background: #101c2b; }
+.hud-centro .icon-btn[aria-pressed="true"] { background: #08303d; }
+.hud-centro .cta-incident { background: #3a1624; }
+.hud-centro .cta-incident:hover { background: #5a1c30; }
+.hud-centro .cta-warn { background: #3a2c14; }
+.hud-centro .cta-warn:hover:not(:disabled) { background: #5a4318; }
+.hud-centro .cta-recover { background: #0f3a2f; }
+.hud-centro .cta-recover:hover:not(:disabled) { background: #14513f; }
+.hud-centro .controls { background: rgba(7, 17, 31, 0.9); }
+.hud-centro .cta:disabled { opacity: 0.75; }
+
+/* adaptación de la vista Centro (va después de .hud-centro para no ser pisada) */
+@media (max-width: 1300px) { .hud-centro { grid-template-columns: 290px minmax(0, 1fr) 310px; } }
+@media (max-width: 1050px) {
+  .hud-centro { grid-template-columns: 270px minmax(0, 1fr); grid-template-areas: "top top" "left banner" "left ." "left ctrl"; }
+  .hud-centro .col-right { display: none; }
+}
+@media (max-width: 720px) {
+  .hud-centro {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "top" "banner" "." "ctrl" "attr"; gap: 8px; padding: 10px;
+  }
+  .hud-centro .col { display: none; } /* ponytail: paneles ocultos en móvil, bottom sheet si hacen falta */
+  .hud-centro .top { padding: 8px 10px; border-radius: 8px; background: rgba(7, 17, 31, 0.9); border: 1px solid var(--line); gap: 8px; }
+  .hud-centro .brand { gap: 8px; min-width: 0; }
+  .hud-centro .brand h1 { font-size: 15px; letter-spacing: 0.14em; white-space: nowrap; }
+  .hud-centro .top-right { flex-direction: column; align-items: flex-end; gap: 4px; }
+  .hud-centro .clock { display: none; }
+  .hud-centro .api, .hud-centro .demo { padding: 3px 9px; font-size: 9.5px; letter-spacing: 0.08em; white-space: nowrap; }
+  .hud-centro .banner { padding: 8px 12px; }
+  .hud-centro .controls { justify-self: stretch; padding: 8px; gap: 6px; background: rgba(7, 17, 31, 0.94); }
+  .hud-centro .controls-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .hud-centro .cta.sm { height: auto; min-height: 42px; padding: 6px 10px; gap: 7px; font-size: 12px; line-height: 1.2; text-align: left; }
+  .hud-centro .cta svg { flex: none; }
+  .hud-centro .icon-group { grid-column: 1 / -1; justify-content: center; gap: 10px; }
+  .hud-centro .icon-group .icon-btn { width: 44px; height: 38px; }
+  .hud-centro .legend { font-size: 10px; text-align: center; }
+  .hud-centro .attribution { position: static; grid-area: attr; text-align: center; padding: 3px 8px; border-radius: 6px; background: rgba(7, 17, 31, 0.9); opacity: 1; }
+  .dlabel { font-size: 11px; padding: 2px 6px; } .dlabel.landmark { font-size: 10.5px; }
+}
+
+/* anuncio de congestión: clic para ir al lugar */
+.hud-centro .banner { cursor: pointer; }
+.hud-centro .banner:hover { border-color: var(--red); }
+.banner-go { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: rgba(255, 84, 112, 0.18); border: 1px solid rgba(255, 84, 112, 0.6); color: #ffd2da; }
+.banner-go:hover { background: rgba(255, 84, 112, 0.32); }
+@media (max-width: 720px) { .banner-go { padding: 6px 8px; } }

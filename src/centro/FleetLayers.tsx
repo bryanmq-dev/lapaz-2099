@@ -9,11 +9,12 @@ import { project, type LL, type LineInfo } from './data'
 import { drape, type HeightFn } from './geometry'
 import { fleet, vehiclePos, type Snapshot } from './useFleet'
 
-const MAX = 64
+const MAX = 400 // ponytail: ~330 vehículos con la hora punta; subir si la flota crece
 // objetos auxiliares reutilizados en cada frame (sin asignaciones por frame)
 const o = new THREE.Object3D()
 const c = new THREE.Color()
 const RED = new THREE.Color(PALETTE.red), AMBER = new THREE.Color(PALETTE.amber), GREEN = new THREE.Color(PALETTE.green)
+const FLEET_GREY = new THREE.Color('#9db4c8') // flota simulada: se distingue de las 3 líneas reales con color propio
 
 export function Vehicles({ height, lines, hidden, selected, onSelect }: {
   height: HeightFn; lines: LineInfo[]; hidden: Set<string>; selected: number | null; onSelect: (id: number | null) => void
@@ -51,14 +52,15 @@ export function Vehicles({ height, lines, hidden, selected, onSelect }: {
       o.scale.set(trufi ? 2.2 : 2.6, trufi ? 1.9 : 2.7, trufi ? 5 : 7.5).multiplyScalar(1.6) // ponytail: exageración ×1.6 para que se lean a escala ciudad
       o.updateMatrix()
       bodies.current!.setMatrixAt(i, o.matrix)
-      const base = lineColor.get(v.code) ?? GREEN
+      const base = lineColor.get(v.code) ?? FLEET_GREY
       if (v.state === 'alerta') c.copy(RED).multiplyScalar(0.55 + 0.45 * Math.sin(t * 9))
       else if (v.state === 'detenido') c.copy(AMBER)
       else if (v.state === 'desvio') c.copy(GREEN)
       else c.copy(base).multiplyScalar(v.state === 'congestion' ? 0.55 : 1)
       bodies.current!.setColorAt(i, c)
       // marcador con tamaño ~constante en pantalla: legible tanto en la vista general como de cerca
-      const size = Math.max(3, camera.position.distanceTo(o.position) * 0.0065) * (v.id === selected ? 1.6 : v.state === 'alerta' ? 1.35 : 1)
+      const small = v.sim && v.id !== selected && v.state !== 'alerta' && v.state !== 'detenido' // la flota simulada: marcador más discreto
+      const size = Math.max(small ? 2 : 3, camera.position.distanceTo(o.position) * (small ? 0.0042 : 0.0065)) * (v.id === selected ? 1.6 : v.state === 'alerta' ? 1.35 : 1)
       o.position.y = y + 8 + size * 2.2
       o.rotation.set(0, t, 0)
       o.scale.setScalar(size)
@@ -173,20 +175,31 @@ export function Geofences({ list, height, alerted }: { list: Geofence[]; height:
 }
 
 /** Sigue al vehículo seleccionado y vuelve a la vista general cuando se pide. */
-export function CameraRig({ selected, follow, homeSeq, home, height }: {
-  selected: number | null; follow: boolean; homeSeq: number; home: { target: THREE.Vector3; camera: THREE.Vector3 }; height: HeightFn
+export function CameraRig({ selected, follow, homeSeq, focusAt, home, height }: {
+  selected: number | null; follow: boolean; homeSeq: number; focusAt: { ll: LL; seq: number } | null
+  home: { target: THREE.Vector3; camera: THREE.Vector3 }; height: HeightFn
 }) {
   const get = useThree((s) => s.get)
   const camera = useThree((s) => s.camera)
   const goHome = useRef(false)
   const approach = useRef(false)
   const seenHome = useRef(homeSeq)
+  const seenFocus = useRef(focusAt?.seq ?? 0)
+  const focusGoal = useRef<{ target: THREE.Vector3; camera: THREE.Vector3 } | null>(null) // vuelo hacia una zona (p. ej. una congestión)
 
   useEffect(() => { approach.current = selected != null }, [selected])
   useEffect(() => { if (import.meta.env.DEV) Object.assign(globalThis, { __centro: get }) }, [get]) // depuración
   useEffect(() => {
-    if (homeSeq !== seenHome.current) { seenHome.current = homeSeq; goHome.current = true }
+    if (homeSeq !== seenHome.current) { seenHome.current = homeSeq; goHome.current = true; focusGoal.current = null }
   }, [homeSeq])
+  useEffect(() => {
+    if (!focusAt || focusAt.seq === seenFocus.current) return
+    seenFocus.current = focusAt.seq
+    const [x, z] = project(focusAt.ll)
+    const target = new THREE.Vector3(x, height(x, z), z)
+    focusGoal.current = { target, camera: target.clone().add(new THREE.Vector3(230, 260, 330)) } // ~420 m, misma orientación que la vista general
+    goHome.current = false
+  }, [focusAt, height])
 
   useFrame((_, dt) => {
     const ctl = get().controls as OrbitControlsImpl | null
@@ -196,6 +209,13 @@ export function CameraRig({ selected, follow, homeSeq, home, height }: {
       ctl.target.lerp(home.target, k)
       camera.position.lerp(home.camera, k)
       if (camera.position.distanceTo(home.camera) < 5) goHome.current = false
+      return
+    }
+    const fly = focusGoal.current
+    if (fly) {
+      ctl.target.lerp(fly.target, k)
+      camera.position.lerp(fly.camera, k)
+      if (camera.position.distanceTo(fly.camera) < 4) focusGoal.current = null
       return
     }
     if (selected == null || !follow) return
