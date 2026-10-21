@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { contourMaterial } from './materials'
 import { heightAt } from './shared'
 
 const SIZE = 460
@@ -28,25 +29,7 @@ export function Terrain() {
     return g
   }, [])
 
-  const material = useMemo(() => {
-    const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: true })
-    m.onBeforeCompile = (s) => {
-      s.vertexShader = s.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying float vH;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvH = position.y;')
-      s.fragmentShader = s.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vH;')
-        .replace(
-          '#include <emissivemap_fragment>',
-          `#include <emissivemap_fragment>
-          float q = vH * 0.55;
-          float cl = abs(fract(q) - 0.5);
-          float line = 1.0 - smoothstep(0.0, max(fwidth(q) * 1.1, 0.02), cl);
-          totalEmissiveRadiance += vec3(0.0, 0.5, 0.7) * line * 0.1 * (1.0 - smoothstep(26.0, 40.0, vH));`,
-        )
-    }
-    return m
-  }, [])
+  const material = useMemo(() => contourMaterial({ density: 0.55, intensity: 0.1, fadeFrom: 26, fadeTo: 40 }), [])
 
   return <mesh geometry={geometry} material={material} raycast={() => null} />
 }

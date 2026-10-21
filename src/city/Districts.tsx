@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { DISTRICTS } from '../simulation/cityData'
 import type { BuildingStyle } from '../simulation/types'
 import { sim } from '../simulation/useSimulation'
+import { setView } from '../view'
 import { PALETTE, ROAD_GEOS, fx, padHeight, reducedMotion } from './shared'
 
 const LABEL_H: Record<BuildingStyle, number> = { core: 25, high: 19, mid: 13, low: 10 }
@@ -51,6 +52,7 @@ export function Districts() {
           <group key={d.id} position={[d.pos[0], y, d.pos[1]]}>
             <mesh rotation-x={-Math.PI / 2}
               onClick={(e) => { e.stopPropagation(); sim.dispatch({ type: 'select', id: sim.getView().state.selectedId === d.id ? null : d.id }) }}
+              onDoubleClick={(e) => { e.stopPropagation(); if (d.id === 'centro') setView('centro') }}
               onPointerOver={(e) => { e.stopPropagation(); hover.current = i; document.body.style.cursor = 'pointer' }}
               onPointerOut={() => { hover.current = -1; document.body.style.cursor = '' }}>
               <circleGeometry args={[d.radius * 1.15, 56]} />

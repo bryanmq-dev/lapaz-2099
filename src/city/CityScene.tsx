@@ -15,15 +15,15 @@ import { PALETTE, padHeight, reducedMotion, stepColors } from './shared'
 
 const HOME_POS = new THREE.Vector3(98, 86, 72)
 const HOME_TARGET = new THREE.Vector3(0, 0, -8)
-const HORIZON = '#0d2a40'
+export const HORIZON = '#0d2a40'
 const CAMERA = { position: HOME_POS.toArray(), fov: 42, near: 0.5, far: 1500 }
 const GL = { antialias: true, powerPreference: 'high-performance' } as const
 
-function Sky() {
+export function Sky({ radius = 800 }: { radius?: number }) {
   const uniforms = useMemo(() => ({ uH: { value: new THREE.Color(HORIZON) }, uZ: { value: new THREE.Color('#040a14') } }), [])
   return (
     <mesh raycast={() => null} renderOrder={-10}>
-      <sphereGeometry args={[800, 32, 16]} />
+      <sphereGeometry args={[radius, 32, 16]} />
       <shaderMaterial
         side={THREE.BackSide} depthWrite={false} fog={false} uniforms={uniforms}
         vertexShader="varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }"

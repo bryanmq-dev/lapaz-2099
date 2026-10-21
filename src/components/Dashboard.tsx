@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Activity, Gauge, Maximize, Minimize, PanelsTopLeft, Route, SatelliteDish, Siren, TriangleAlert, type LucideIcon,
+  Activity, Gauge, Map as MapIcon, Maximize, Minimize, PanelsTopLeft, Route, SatelliteDish, Siren, TriangleAlert, type LucideIcon,
 } from 'lucide-react'
 import { DISTRICTS, districtById } from '../simulation/cityData'
 import { sim } from '../simulation/useSimulation'
+import { setView } from '../view'
 import type { DistrictStatus, IncidentPhase, Level, SimView } from '../simulation/types'
 import { ControlPanel } from './ControlPanel'
 import { EventFeed } from './EventFeed'
@@ -76,6 +77,11 @@ function ZoneDetail({ view }: { view: SimView }) {
           ))}
         </ul>
       )}
+      {sel === 'centro' && (
+        <button className="cta cta-recover sm detail-cta" onClick={() => setView('centro')}>
+          <MapIcon size={16} />Ver el Centro en detalle (datos reales)
+        </button>
+      )}
     </Section>
   )
 }
@@ -103,6 +109,9 @@ export function Dashboard({ view }: { view: SimView }) {
           </div>
         </div>
         <div className="top-right">
+          <button className="icon-btn wide" title="Vista detallada del Centro con datos reales" onClick={() => setView('centro')}>
+            <MapIcon size={15} />Centro en detalle
+          </button>
           <span className="demo"><i />DEMO · SIMULACIÓN</span>
           <div className="clock"><small>HORA SIM.</small><b>{view.clock}</b></div>
           <button className="icon-btn" aria-pressed={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>

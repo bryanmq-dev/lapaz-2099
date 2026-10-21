@@ -8,4 +8,6 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  // API de seguimiento (server/) en desarrollo
+  server: { proxy: { '/api': 'http://localhost:3001' } },
 })
