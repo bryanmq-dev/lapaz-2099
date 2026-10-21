@@ -1,35 +1,40 @@
-# React + TypeScript + Vite
+# LA PAZ 2050 · Smart City Control
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Gemelo digital de La Paz con dos vistas:
 
-Currently, two official plugins are available:
+1. **Ciudad**: visión conceptual de toda la ciudad (simulación en el navegador).
+2. **Centro**: el Centro reconstruido con datos reales de OpenStreetMap y elevación SRTM. Muestra el seguimiento de 3 líneas reales de minibús y trufi, con alertas espaciales en PostGIS y desvíos sugeridos dentro de la zona.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Todos los datos de flota, tráfico y alertas son **simulados**. Ver [docs/caso-estudio-rutas.md](docs/caso-estudio-rutas.md) y [CHANGELOG.md](CHANGELOG.md).
 
-## React Compiler
+## Ejecutar
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+Todo con Docker (web en http://localhost:8080):
 
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+docker compose up --build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Desarrollo:
+
+```sh
+pnpm install && pnpm --dir server install
+docker compose up -d db          # PostGIS en el puerto 5433
+pnpm --dir server dev            # API + simulador en :3001 (migra y carga datos al iniciar)
+pnpm dev                         # web en :5173 (redirige /api a :3001)
+```
+
+La vista ciudad funciona sin la API. La vista del Centro muestra el mapa 3D sin la API, pero los vehículos y las alertas vienen del servidor.
+
+## Comprobaciones
+
+```sh
+pnpm exec tsc -b && pnpm lint && pnpm build
+pnpm check:sim                   # motor de la vista ciudad
+pnpm --dir server check          # escenarios contra PostGIS real (base aparte: lapaz_check)
+```
+
+## Datos
+
+`node scripts/centro/fetch.ts` regenera `public/centro/` desde OpenStreetMap (Overpass) y AWS Terrain Tiles (usa caché en `scripts/centro/.cache`; con `--refresh` descarga de nuevo).
+© OpenStreetMap contributors, ODbL.
