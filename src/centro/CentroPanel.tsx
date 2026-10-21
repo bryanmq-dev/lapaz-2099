@@ -6,7 +6,7 @@ import {
 import { EventFeed } from '../components/EventFeed'
 import { MetricCard } from '../components/MetricCard'
 import type { LineInfo, RouteLine } from './data'
-import type { AlertKind, FleetVehicle, Snapshot } from './useFleet'
+import type { AlertKind, FleetAlert, FleetVehicle, Snapshot } from './useFleet'
 
 const ALERT_LABEL: Record<AlertKind, string> = {
   fuera_de_ruta: 'Fuera de ruta', detenido: 'Detenido', geocerca: 'Geocerca', congestion: 'Congestión',
@@ -34,7 +34,7 @@ export function Kpis({ snap }: { snap: Snapshot | null }) {
   const m = snap?.metrics
   return (
     <div className="kpis">
-      <MetricCard icon={Bus} label="En el Centro" value={m?.active ?? 0} sub="vehículos activos" tone="cyan" />
+      <MetricCard icon={Bus} label="En el Centro" value={m?.active ?? 0} sub={m?.reserveOut ? `${m.reserveOut} de refuerzo en hora punta` : 'vehículos activos'} tone="cyan" />
       <MetricCard icon={Gauge} label="Velocidad" value={m?.avgSpeedKmh ?? 0} decimals={1} unit="km/h" sub="media de la flota" tone={(m?.avgSpeedKmh ?? 20) < 10 ? 'amber' : 'green'} />
       <MetricCard icon={TriangleAlert} label="Alertas" value={m?.alerts ?? 0} sub={m?.alerts ? 'abiertas en PostGIS' : 'sin alertas'} tone={m?.alerts ? 'red' : 'green'} />
       <MetricCard icon={TrafficCone} label="Congestión" value={m?.congestedSegments ?? 0} sub="tramos saturados" tone={m?.congestedSegments ? 'amber' : 'green'} />
@@ -130,7 +130,7 @@ export function VehiclePanel({ detail, live, follow, onFollow }: {
   )
 }
 
-export function AlertsPanel({ snap, onPick }: { snap: Snapshot | null; onPick: (vehicleId: number) => void }) {
+export function AlertsPanel({ snap, onPick }: { snap: Snapshot | null; onPick: (alert: FleetAlert) => void }) {
   const alerts = snap?.alerts ?? []
   const reroutes = snap?.reroutes ?? []
   return (
@@ -145,7 +145,7 @@ export function AlertsPanel({ snap, onPick }: { snap: Snapshot | null; onPick: (
         <ul className="alert-list">
           {alerts.map((a) => (
             <li key={a.id}>
-              <button disabled={!a.vehicleId} onClick={() => a.vehicleId && onPick(a.vehicleId)} className={`al-${a.kind}`}>
+              <button disabled={!a.vehicleId && a.lon == null} onClick={() => onPick(a)} className={`al-${a.kind}`} title={a.vehicleId ? 'Seguir al vehículo' : 'Ver en el mapa'}>
                 <TriangleAlert size={12} />
                 <b>{ALERT_LABEL[a.kind]}</b>
                 <span>{a.plate ? `${a.plate} · Línea ${a.code}` : String(a.detail.via ?? '')}</span>
@@ -174,7 +174,7 @@ export function Events({ snap }: { snap: Snapshot | null }) {
 }
 
 const SCENARIOS = [
-  { id: 'congestion', label: 'Congestión en El Prado', icon: TrafficCone, tone: 'incident' },
+  { id: 'congestion', label: 'Hora punta en El Prado', icon: TrafficCone, tone: 'incident' },
   { id: 'desvio', label: 'Desvío no autorizado', icon: Route, tone: 'warn' },
   { id: 'averia', label: 'Avería', icon: Wrench, tone: 'warn' },
   { id: 'geocerca', label: 'Ingreso a geocerca', icon: Ban, tone: 'warn' },

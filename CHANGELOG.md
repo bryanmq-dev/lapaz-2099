@@ -2,6 +2,42 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado semántico.
 
+## [0.4.0] — 2026-10-21
+
+Modo claro en toda la aplicación y paneles ocultables en la vista del Centro.
+
+### Agregado
+- **Modo claro / oscuro** con un botón sol/luna en las cabeceras de la vista ciudad y del Centro. La elección se recuerda (`localStorage`); el oscuro sigue siendo el predeterminado.
+  - La interfaz usa variables CSS; el modo claro solo las redefine.
+  - Las escenas 3D tienen paleta clara: cielo, niebla, luces, terreno, edificios (sin ventanas encendidas de día), calles, parques, plazas y geocercas.
+  - Los buses de las líneas reales **conservan su color**; los buses de relleno de la flota simulada pasan a **negro** en modo claro (siguen grises en oscuro).
+- **Ocultar paneles** en la vista del Centro, con el mismo botón que la vista ciudad (`hud-min`). Se deja a la vista la cabecera, los escenarios y el anuncio de congestión.
+
+### Corregido
+- En móvil, los botones de la cabecera de la vista ciudad (paneles y pantalla completa) se salían de la pantalla: ahora la cabecera hace salto de línea.
+
+## [0.3.0] — 2026-10-21
+
+Flota simulada de más de 240 minibuses, hora punta con congestión emergente en El Prado, el Obelisco y la Av. Camacho, y vista del Centro adaptada a móvil.
+
+### Corregido
+- Vista Centro en móvil y tablet: la grilla de 330 px + 350 px pisaba los `@media` y recortaba la pantalla. Ahora en ≤720 px los paneles laterales se ocultan, el encabezado se compacta y los 4 escenarios quedan en una cuadrícula de 2 columnas sobre un fondo casi opaco, con la atribución de OSM debajo; en ≤1050 px se oculta el panel derecho.
+
+### Agregado
+- **Flota simulada de 28 líneas** (`server/src/fleet.ts`, migración `002_flota_simulada.sql`): 224 minibuses en servicio más 50 unidades de refuerzo, sobre rutas calculadas en la red vial real (no son líneas reales). Con las líneas reales hay más de 240 minibuses en servicio.
+- **Hora punta con congestión emergente**: las 50 unidades de refuerzo llegan en ~90 s a El Prado, el Obelisco y la Av. Camacho y forman cola por sí solas. Salen al iniciar, cada 8 min y con el botón «Hora punta en El Prado».
+- **Seguimiento de vehículo** (modelo de Krauss), paradas dentro del carril y un semáforo simulado en el Obelisco. La congestión de cada tramo se mide con la velocidad real de los vehículos.
+- Las alertas de congestión indican la zona (p. ej. «Av. Eliodoro Camacho (zona Obelisco)») y los vehículos en cola ya no disparan alertas de «detenido» (`vehicle_positions.queued`).
+- **Clic en una congestión**: el anuncio rojo, su botón «Ver en el mapa» y la alerta del panel hacen volar la cámara al lugar (~420 m). Las alertas del stream incluyen ahora `lon` y `lat` (el punto de PostGIS).
+- **Documentación técnica** en `docs/explicacion-tecnica.md`: origen de los datos, modelo de datos, simulador, detección de congestión y alertas, incidentes, API, front, pruebas, parámetros, límites y un guion para exponerlo.
+- La comprobación de punta a punta cubre la flota (≥ 200 minibuses), la hora punta, la alerta emergente, los desvíos y la recuperación.
+
+### Cambiado
+- Botones de escenarios y de iconos de la vista Centro con fondo casi sólido en lugar de translúcido.
+- «Congestión en El Prado» pasa a «Hora punta en El Prado»: ya no fija la congestión a mano. «Despejar El Prado» simula a un agente de tránsito.
+- Los desvíos se calculan con una cola de prioridad (de ~2–5 s a ~0,4 s) y se proponen solos cuando se abre una congestión; el panel solo lista los de las líneas reales.
+- La vista Centro dibuja hasta 400 vehículos (antes 64); los de la flota simulada llevan color y marcador propios.
+
 ## [0.2.0] — 2026-10-21
 
 Seguimiento de transporte público en el Centro de La Paz con datos reales y PostGIS.

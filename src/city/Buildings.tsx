@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { DISTRICTS, mulberry32 } from '../simulation/cityData'
 import { sim } from '../simulation/useSimulation'
+import { getTheme, useTheme } from '../theme'
 import { distToRoads, fx, heightAt } from './shared'
 
 interface B { x: number; z: number; y: number; w: number; d: number; h: number; district: number; shade: number }
@@ -42,8 +43,8 @@ function generate(): B[] {
 const BUILDINGS = generate()
 
 /** Ventanas procedurales (en espacio local del edificio) + tinte según el modo. */
-function makeMaterial() {
-  const m = new THREE.MeshStandardMaterial({ color: '#9fb3c8', roughness: 0.75, metalness: 0.15 })
+function makeMaterial(light: boolean) {
+  const m = new THREE.MeshStandardMaterial({ color: light ? '#ffffff' : '#9fb3c8', roughness: 0.75, metalness: 0.15 })
   m.onBeforeCompile = (s) => {
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vLocal; varying vec3 vN; varying float vSy; varying float vSeed;')
@@ -72,8 +73,10 @@ function makeMaterial() {
         float win = step(0.2, f.x) * step(f.x, 0.8) * step(0.25, f.y) * step(f.y, 0.7);
         float rnd = fract(sin(dot(cell + vSeed * 91.7, vec2(12.9898, 78.233))) * 43758.5453);
         float lit = step(0.5, rnd) * step(abs(vN.y), 0.5) * step(fy, vSy - 0.35) * step(0.3, fy);
-        totalEmissiveRadiance += win * lit * mix(vec3(1.0, 0.78, 0.5), vColor.rgb * 1.6, 0.55) * (0.55 + 0.6 * rnd);
-        totalEmissiveRadiance += roof * vColor.rgb * 0.35;`,
+        ${light
+          ? 'diffuseColor.rgb *= 1.0 - 0.38 * win * lit; // de día: vidrios oscuros, sin luces'
+          : `totalEmissiveRadiance += win * lit * mix(vec3(1.0, 0.78, 0.5), vColor.rgb * 1.6, 0.55) * (0.55 + 0.6 * rnd);
+        totalEmissiveRadiance += roof * vColor.rgb * 0.35;`}`,
       )
   }
   return m
@@ -81,7 +84,8 @@ function makeMaterial() {
 
 export function Buildings() {
   const ref = useRef<THREE.InstancedMesh>(null)
-  const material = useMemo(() => makeMaterial(), [])
+  const light = useTheme() === 'light'
+  const material = useMemo(() => makeMaterial(light), [light])
   const col = useMemo(() => new THREE.Color(), [])
 
   useLayoutEffect(() => {
@@ -105,7 +109,7 @@ export function Buildings() {
     const selected = sim.getView().state.selectedId
     BUILDINGS.forEach((b, i) => {
       const id = DISTRICTS[b.district].id
-      const boost = b.shade * (1 + fx.glow[b.district] * (id === selected ? 0.5 : 0.4))
+      const boost = b.shade * (1 + fx.glow[b.district] * (id === selected ? 0.5 : 0.4)) * (getTheme() === 'light' ? 1.5 : 1)
       col.copy(fx.colors[b.district]).multiplyScalar(boost)
       mesh.setColorAt(i, col)
     })

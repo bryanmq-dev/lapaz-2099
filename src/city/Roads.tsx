@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { DISTRICTS, ROADS, mulberry32 } from '../simulation/cityData'
 import type { Incident } from '../simulation/types'
 import { sim } from '../simulation/useSimulation'
+import { getTheme, useTheme } from '../theme'
 import { PALETTE, ROAD_GEOS, fx, reducedMotion, ribbon, type RoadGeo } from './shared'
 
 const CYAN = new THREE.Color(PALETTE.cyan)
@@ -37,6 +38,7 @@ const VEHICLES: Vehicle[] = (() => {
 })()
 
 export function Roads() {
+  const light = useTheme() === 'light'
   const asphalt = useMemo(() => mergeGeometries(ROAD_GEOS.map((r) => ribbon(r.pts, 1.5, 0.02)))!, [])
   const lines = useMemo(() => ROAD_GEOS.map((r) => ribbon(r.pts, 0.17, 0.07)), [])
   const halos = useMemo(() => ROAD_GEOS.map((r) => ribbon(r.pts, 1.0, 0.05)), [])
@@ -100,8 +102,8 @@ export function Roads() {
       mesh.setMatrixAt(i, dummy.matrix)
       if (detour) c.copy(GREEN)
       else if (mode === 'traffic') c.copy(GREEN).lerp(AMBER, Math.min(1, cong / 0.35)).lerp(RED, Math.min(1, Math.max(0, (cong - 0.35) / 0.25)))
-      else if (mode === 'energy') c.set('#cfeeff')
-      else c.set('#2b5f7c')
+      else if (mode === 'energy') c.set(getTheme() === 'light' ? '#1c7ea8' : '#cfeeff')
+      else c.set(getTheme() === 'light' ? '#1b4d6b' : '#2b5f7c')
       mesh.setColorAt(i, c)
     })
     mesh.instanceMatrix.needsUpdate = true
@@ -117,13 +119,13 @@ export function Roads() {
   return (
     <group>
       <mesh geometry={asphalt} raycast={() => null}>
-        <meshStandardMaterial color="#0a1524" roughness={0.9} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
+        <meshStandardMaterial color={light ? '#69778a' : '#0a1524'} roughness={0.9} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
       </mesh>
       {ROAD_GEOS.map((r, i) => (
         <group key={r.id}>
           <mesh geometry={halos[i]} raycast={() => null}>
             <meshBasicMaterial ref={(m) => { haloMats.current[i] = m }} color={PALETTE.cyan} transparent opacity={0.17}
-              blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3} />
+              blending={light ? THREE.NormalBlending : THREE.AdditiveBlending} depthWrite={false} toneMapped={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3} />
           </mesh>
           <mesh geometry={lines[i]} raycast={() => null}>
             <meshBasicMaterial ref={(m) => { lineMats.current[i] = m }} color={PALETTE.cyan} toneMapped={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />

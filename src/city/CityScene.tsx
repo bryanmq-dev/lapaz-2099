@@ -11,16 +11,17 @@ import { Fallback } from './Fallback'
 import { Roads } from './Roads'
 import { SensorNodes } from './SensorNodes'
 import { Terrain } from './Terrain'
-import { PALETTE, padHeight, reducedMotion, stepColors } from './shared'
+import { SCENE, useTheme } from '../theme'
+import { padHeight, reducedMotion, stepColors } from './shared'
 
 const HOME_POS = new THREE.Vector3(98, 86, 72)
 const HOME_TARGET = new THREE.Vector3(0, 0, -8)
-export const HORIZON = '#0d2a40'
 const CAMERA = { position: HOME_POS.toArray(), fov: 42, near: 0.5, far: 1500 }
 const GL = { antialias: true, powerPreference: 'high-performance' } as const
 
 export function Sky({ radius = 800 }: { radius?: number }) {
-  const uniforms = useMemo(() => ({ uH: { value: new THREE.Color(HORIZON) }, uZ: { value: new THREE.Color('#040a14') } }), [])
+  const T = SCENE[useTheme()]
+  const uniforms = useMemo(() => ({ uH: { value: new THREE.Color(T.horizon) }, uZ: { value: new THREE.Color(T.zenith) } }), [T])
   return (
     <mesh raycast={() => null} renderOrder={-10}>
       <sphereGeometry args={[radius, 32, 16]} />
@@ -98,17 +99,19 @@ function hasWebGL() {
 }
 
 export function CityScene() {
+  const theme = useTheme()
+  const T = SCENE[theme], light = theme === 'light'
   if (!hasWebGL()) return <Fallback />
   return (
     <Boundary>
       <Canvas dpr={[1, 1.75]} gl={GL} camera={CAMERA}>
-        <color attach="background" args={[PALETTE.bg]} />
-        <fog attach="fog" args={[HORIZON, 95, 270]} />
-        <hemisphereLight args={['#5b8fcf', '#08111d', 0.75]} />
-        <directionalLight color="#a9ccff" intensity={1.25} position={[-70, 90, 50]} />
-        <directionalLight color="#00d5ff" intensity={0.35} position={[60, 30, -60]} />
+        <color attach="background" args={[T.bg]} />
+        <fog attach="fog" args={[T.horizon, 95, 270]} />
+        <hemisphereLight args={[T.hemiSky, T.hemiGround, light ? 1.05 : 0.75]} />
+        <directionalLight color={T.sun} intensity={light ? 1.7 : 1.25} position={[-70, 90, 50]} />
+        <directionalLight color={T.rim} intensity={light ? 0.3 : 0.35} position={[60, 30, -60]} />
         <Sky />
-        <Stars radius={500} depth={60} count={1800} factor={5} fade speed={reducedMotion ? 0 : 0.4} />
+        {T.stars && <Stars radius={500} depth={60} count={1800} factor={5} fade speed={reducedMotion ? 0 : 0.4} />}
         <Stepper />
         <Terrain />
         <Roads />

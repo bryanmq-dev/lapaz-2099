@@ -33,7 +33,7 @@ export function drape(pts: LL[], height: HeightFn, lift: number, every = 6): THR
 
 // ---- terreno ------------------------------------------------------------------
 
-export function terrainGeometry(el: Elevation) {
+export function terrainGeometry(el: Elevation, light = false) {
   const { w, h } = el
   const pos = new Float32Array(w * h * 3)
   for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
@@ -51,7 +51,7 @@ export function terrainGeometry(el: Elevation) {
   g.computeVertexNormals()
   const n = g.attributes.normal, span = el.max - el.min
   const col = new Float32Array(w * h * 3)
-  const low = new THREE.Color('#0b1829'), mid = new THREE.Color('#1a3150'), high = new THREE.Color('#33506f'), c = new THREE.Color()
+  const low = new THREE.Color(light ? '#c9cfae' : '#0b1829'), mid = new THREE.Color(light ? '#bcb394' : '#1a3150'), high = new THREE.Color(light ? '#a29d92' : '#33506f'), c = new THREE.Color()
   for (let v = 0; v < w * h; v++) {
     const t = pos[v * 3 + 1] / span
     c.copy(low).lerp(mid, Math.min(1, t * 2.2)).lerp(high, Math.max(0, t * 2 - 1)).multiplyScalar(0.7 + 0.5 * n.getY(v))
@@ -64,9 +64,9 @@ export function terrainGeometry(el: Elevation) {
 // ---- edificios (una sola malla; ventanas en el shader) -------------------------
 
 /** Extrusión propia: paredes con coordenadas de fachada (u, v) para el patrón de ventanas + techo triangulado. */
-export function buildingsGeometry(list: Building[], minElev: number) {
+export function buildingsGeometry(list: Building[], minElev: number, light = false) {
   const pos: number[] = [], nor: number[] = [], col: number[] = [], win: number[] = [], idx: number[] = []
-  const real = new THREE.Color('#6f8fb0'), est = new THREE.Color('#3f5874'), named = new THREE.Color('#a8c6e4')
+  const real = new THREE.Color(light ? '#dfe3e8' : '#6f8fb0'), est = new THREE.Color(light ? '#c6ccd4' : '#3f5874'), named = new THREE.Color(light ? '#f3d9b8' : '#a8c6e4')
   for (const b of list) {
     let ring = b.pts.map(project)
     if (THREE.ShapeUtils.isClockWise(ring.map(([x, z]) => new THREE.Vector2(x, -z)))) ring = ring.reverse()
@@ -100,7 +100,7 @@ export function buildingsGeometry(list: Building[], minElev: number) {
   return g
 }
 
-export function buildingsMaterial() {
+export function buildingsMaterial(light = false) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 })
   m.onBeforeCompile = (s) => {
     s.vertexShader = s.vertexShader
@@ -116,8 +116,10 @@ export function buildingsMaterial() {
         float win = step(0.22, f.x) * step(f.x, 0.78) * step(0.28, f.y) * step(f.y, 0.72);
         float rnd = fract(sin(dot(cell + vWin.w * 97.1, vec2(12.9898, 78.233))) * 43758.5453);
         float lit = step(0.46, rnd) * (1.0 - vRoof) * step(2.5, vWin.y) * step(vWin.y, vWin.z - 1.5);
-        totalEmissiveRadiance += win * lit * mix(vec3(1.0, 0.76, 0.45), vec3(0.55, 0.85, 1.0), step(0.8, rnd)) * (0.5 + 0.7 * rnd);
-        totalEmissiveRadiance += vRoof * vec3(0.0, 0.18, 0.26);`,
+        ${light
+          ? 'diffuseColor.rgb *= 1.0 - 0.4 * win * lit; // de día: vidrios oscuros, sin luces'
+          : `totalEmissiveRadiance += win * lit * mix(vec3(1.0, 0.76, 0.45), vec3(0.55, 0.85, 1.0), step(0.8, rnd)) * (0.5 + 0.7 * rnd);
+        totalEmissiveRadiance += vRoof * vec3(0.0, 0.18, 0.26);`}`,
       )
   }
   return m

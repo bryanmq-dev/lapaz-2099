@@ -5,16 +5,19 @@ export type VehicleState = 'normal' | 'congestion' | 'desvio' | 'detenido' | 'al
 export type AlertKind = 'fuera_de_ruta' | 'detenido' | 'geocerca' | 'congestion'
 
 export interface FleetVehicle {
-  id: number; plate: string; code: string; direction: 'ida' | 'vuelta'; kind: string
+  id: number; plate: string; code: string; sim: boolean; direction: 'ida' | 'vuelta'; kind: string
   lon: number; lat: number; heading: number; speedKmh: number; state: VehicleState; alert: AlertKind | null
 }
-export interface FleetAlert { id: number; kind: AlertKind; vehicleId: number | null; plate: string | null; code: string | null; detail: Record<string, unknown>; startedAt: string }
+export interface FleetAlert {
+  id: number; kind: AlertKind; vehicleId: number | null; plate: string | null; code: string | null; detail: Record<string, unknown>; startedAt: string
+  lon: number | null; lat: number | null // dónde ocurre (punto de la alerta en PostGIS)
+}
 export interface Reroute { code: string; direction: string; via: string[]; extraM: number; extraMin: number; coords: LL[] }
 export interface FleetEvent { id: number; time: string; level: 'ok' | 'info' | 'warn' | 'critical'; text: string }
 export interface Snapshot {
   t: string; vehicles: FleetVehicle[]; alerts: FleetAlert[]
   congestion: { id: number; level: number; coords: LL[] }[]; reroutes: Reroute[]
-  metrics: { active: number; avgSpeedKmh: number; alerts: number; congestedSegments: number }
+  metrics: { active: number; avgSpeedKmh: number; alerts: number; congestedSegments: number; peak: boolean; reserveOut: number }
   events: FleetEvent[]
 }
 
