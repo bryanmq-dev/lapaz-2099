@@ -7,6 +7,7 @@ import { CentroScene } from './CentroScene'
 import { loadCentro, type CentroData, type LL } from './data'
 import type { Geofence } from './FleetLayers'
 import { runScenario, useFleet, type FleetAlert } from './useFleet'
+import { VrEnter } from './VrEnter'
 
 /** Ficha del vehículo seleccionado (chofer, ruta, recorrido reciente), refrescada cada 2 s. */
 function useVehicleDetail(id: number | null) {
@@ -67,6 +68,7 @@ export function CentroView() {
     try { setMessage(await runScenario(id)) } catch { setMessage('No se pudo contactar a la API') }
     setBusy(false)
   }
+  const toggleLine = (c: string) => setHidden((h) => { const n = new Set(h); if (n.has(c)) n.delete(c); else n.add(c); return n })
   const jam = snap?.alerts.find((a) => a.kind === 'congestion')
   const clock = snap ? new Date(snap.t).toLocaleTimeString('es-BO', { timeZone: 'America/La_Paz', hour12: false }) : '--:--:--'
 
@@ -74,7 +76,8 @@ export function CentroView() {
     <div className="stage">
       {data && (
         <CentroScene data={data} snap={snap} selected={selected} onSelect={select} hidden={hidden}
-          follow={follow} homeSeq={homeSeq} focusAt={focusAt} track={detail?.track ?? []} geofences={geofences} />
+          follow={follow} homeSeq={homeSeq} focusAt={focusAt} track={detail?.track ?? []} geofences={geofences}
+          detail={detail} onToggleLine={toggleLine} onRun={run} busy={busy} message={message} />
       )}
       {!data && <div className="loading">{error ? `No se pudieron cargar los datos del Centro: ${error}` : 'Cargando el Centro de La Paz…'}</div>}
 
@@ -94,6 +97,7 @@ export function CentroView() {
             <span className="demo"><i />DEMO · SIMULACIÓN</span>
             <div className="clock"><small>HORA LA PAZ</small><b>{clock}</b></div>
             <div className="tools">
+              <VrEnter />
               <ThemeToggle />
               <button className="icon-btn panels-toggle" aria-pressed={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>
                 <PanelsTopLeft size={17} />
@@ -107,7 +111,7 @@ export function CentroView() {
             <aside className="col col-left">
               <Kpis snap={snap} />
               <Lines lines={data.lines} routes={data.routes} hidden={hidden} snap={snap}
-                onToggle={(c) => setHidden((h) => { const n = new Set(h); if (n.has(c)) n.delete(c); else n.add(c); return n })} />
+                onToggle={toggleLine} />
             </aside>
             <aside className="col col-right">
               <VehiclePanel detail={detail} live={live} follow={follow} onFollow={() => setFollow((f) => !f)} />

@@ -1,18 +1,16 @@
 import { useState } from 'react'
 import {
-  Activity, Ban, Bus, ChevronDown, Construction, Crosshair, Eye, EyeOff, Gauge, LocateFixed, Route, RotateCcw,
-  ShieldAlert, ShieldCheck, TrafficCone, TriangleAlert, Wrench,
+  Activity, Bus, ChevronDown, Construction, Crosshair, Eye, EyeOff, Gauge, LocateFixed, Route, RotateCcw,
+  ShieldAlert, ShieldCheck, TrafficCone, TriangleAlert,
 } from 'lucide-react'
 import { EventFeed } from '../components/EventFeed'
 import { MetricCard } from '../components/MetricCard'
 import type { LineInfo, RouteLine } from './data'
+import { SCENARIOS, STATE_LABEL } from './labels'
 import type { AlertKind, FleetAlert, FleetVehicle, Snapshot } from './useFleet'
 
 const ALERT_LABEL: Record<AlertKind, string> = {
   fuera_de_ruta: 'Fuera de ruta', detenido: 'Detenido', geocerca: 'Geocerca', congestion: 'Congestión',
-}
-const STATE_LABEL: Record<FleetVehicle['state'], string> = {
-  normal: 'En servicio', congestion: 'En congestión', desvio: 'Desvío autorizado', detenido: 'Detenido', alerta: 'Con alerta',
 }
 
 export interface VehicleDetail {
@@ -173,12 +171,6 @@ export function Events({ snap }: { snap: Snapshot | null }) {
   )
 }
 
-const SCENARIOS = [
-  { id: 'congestion', label: 'Hora punta en El Prado', icon: TrafficCone, tone: 'incident' },
-  { id: 'desvio', label: 'Desvío no autorizado', icon: Route, tone: 'warn' },
-  { id: 'averia', label: 'Avería', icon: Wrench, tone: 'warn' },
-  { id: 'geocerca', label: 'Ingreso a geocerca', icon: Ban, tone: 'warn' },
-] as const
 
 export function ScenarioBar({ snap, busy, message, onRun, onHome }: {
   snap: Snapshot | null; busy: boolean; message: string; onRun: (id: string) => void; onHome: () => void
