@@ -244,6 +244,14 @@ SSE y no WebSocket porque el flujo es unidireccional (servidor → cliente) y `E
 
 **Responsive.** En ≤ 720 px se ocultan los paneles laterales, el encabezado se compacta y los 4 escenarios pasan a una cuadrícula de 2 columnas sobre un fondo casi opaco. En ≤ 1050 px se oculta el panel derecho. Los botones del Centro tienen fondo casi sólido para leerse sobre el mapa.
 
+**Modo VR / realidad mixta (Meta Quest 3).** La misma escena se puede ver como una **maqueta sobre una mesa** con WebXR (`@react-three/xr`). Fuera de una sesión XR nada cambia; los botones «VR» y «Mixta» de la cabecera solo aparecen si el navegador soporta WebXR.
+- **Escala** (`VR` en `src/centro/xr.ts`): en XR 1 unidad = 1 m, y el Centro mide 4,1 km. `VrTable` mete los mismos componentes (`Static`, `Routes`, `Geofences`, `TrafficLayers`, `Vehicles`) en un grupo escalado a `VR.scale` (0.00025 → ~1 m) y centrado ante el usuario. Por eso el plano cercano de la cámara baja de 2 m a 2 cm mientras dura la sesión.
+- **Qué se apaga en XR**: cielo, niebla, `OrbitControls` y `CameraRig` (la cabeza manda). En «Mixta» tampoco hay color de fondo, para que se vea el passthrough. Los rótulos `<Html>` (DOM, invisibles en el visor) pasan a `<Text>` de drei con una fuente local (`public/fonts/`), y los edificios bajos sin nombre se omiten (`VR.minBuildingH`) para aligerar la escena.
+- **Interacción**: los rayos de los controles disparan los mismos `onClick` de los buses. La **base** de la maqueta es el único asa de `@react-three/handle`: con un control se mueve y gira en Y, con los dos se escala (si la asa fuera la ciudad, cada clic sobre un bus también arrastraría la maqueta). Las balizas de los vehículos se miden en coordenadas de la ciudad (`worldToLocal`) y se agrandan ×`VR.beacon` para poder apuntarlas.
+- **Panel** (`VrPanel`): KPIs, anuncio de congestión, los 4 escenarios (más «Despejar»), interruptores de las 3 líneas, ficha del bus seleccionado y «Vista general» (devuelve la maqueta a su sitio). Es 3D, no DOM; los datos son los mismos que los del HUD.
+- **Acceso**: WebXR exige contexto seguro. Por USB: `adb reverse tcp:5173 tcp:5173` y abrir `http://localhost:5173#centro` en el Quest (el proxy `/api` de Vite cubre la API). Por Wi-Fi: `HTTPS=1 pnpm dev` (certificado autofirmado: Avanzado → continuar) o un túnel. La laptop debe tener la BD y la API levantadas.
+- **Rendimiento**: el Quest 3 renderiza dos ojos con GPU móvil. Perillas en `xr.ts`: `minBuildingH`, `foveation`, `frameBufferScaling`. Meta: 72 FPS con la hora punta.
+
 **Vista Ciudad.** Aparte, `src/simulation/simulationEngine.ts` es un motor determinista por pasos (siete distritos, KPIs derivados, incidente con fases de detección, respuesta y recuperación, y Dijkstra sobre un grafo de avenidas para la ruta alterna). Se comprueba con `pnpm check:sim`.
 
 ## 10. Comprobaciones
