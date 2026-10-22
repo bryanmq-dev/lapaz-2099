@@ -2,6 +2,22 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado semántico.
 
+## [0.5.0] — 2026-10-22
+
+Maqueta interactiva del Centro para gafas VR / realidad mixta (Meta Quest 3).
+
+### Agregado
+- **Modo VR y realidad mixta** en la vista del Centro (WebXR, `@react-three/xr`). Botones «VR» y «Mixta» en la cabecera, visibles solo si el navegador soporta WebXR. La ciudad se ve como una **maqueta de ~1 m sobre una mesa**: se mueve y gira con un control, se escala con los dos, y los buses se seleccionan apuntando con el rayo.
+- **Panel flotante 3D** en el visor: KPIs, anuncio de congestión, los escenarios (hora punta, desvío, avería, geocerca, despejar, reiniciar), interruptores de las líneas, ficha del bus seleccionado y «Vista general».
+- `HTTPS=1 pnpm dev` levanta Vite con certificado autofirmado para abrir la app desde el Quest por Wi-Fi.
+
+### Cambiado
+- `STATE_LABEL` y `SCENARIOS` pasan de `CentroPanel.tsx` a `labels.ts` para compartirlos con el panel VR.
+- Las balizas de los vehículos miden su tamaño en coordenadas de la ciudad (sin efecto en la vista de escritorio).
+
+### Pendiente
+- Verificar escala, rendimiento (72 FPS) y selección en los visores reales; las perillas están en `src/centro/xr.ts`.
+
 ## [0.4.0] — 2026-10-21
 
 Modo claro en toda la aplicación y paneles ocultables en la vista del Centro.

@@ -9,16 +9,18 @@ import { FILLER_BUS, getTheme, useTheme } from '../theme'
 import { project, type LL, type LineInfo } from './data'
 import { drape, type HeightFn } from './geometry'
 import { fleet, vehiclePos, type Snapshot } from './useFleet'
+import { VR } from './xr'
 
 const MAX = 400 // ponytail: ~330 vehículos con la hora punta; subir si la flota crece
 // objetos auxiliares reutilizados en cada frame (sin asignaciones por frame)
 const o = new THREE.Object3D()
 const c = new THREE.Color()
+const eye = new THREE.Vector3()
 const RED = new THREE.Color(PALETTE.red), AMBER = new THREE.Color(PALETTE.amber), GREEN = new THREE.Color(PALETTE.green)
 const FILLER = { dark: new THREE.Color(FILLER_BUS.dark), light: new THREE.Color(FILLER_BUS.light) } // flota simulada: se distingue de las 3 líneas reales
 
-export function Vehicles({ height, lines, hidden, selected, onSelect }: {
-  height: HeightFn; lines: LineInfo[]; hidden: Set<string>; selected: number | null; onSelect: (id: number | null) => void
+export function Vehicles({ height, lines, hidden, selected, onSelect, inXR = false }: {
+  height: HeightFn; lines: LineInfo[]; hidden: Set<string>; selected: number | null; onSelect: (id: number | null) => void; inXR?: boolean
 }) {
   const bodies = useRef<THREE.InstancedMesh>(null)
   const beacons = useRef<THREE.InstancedMesh>(null)
@@ -37,6 +39,7 @@ export function Vehicles({ height, lines, hidden, selected, onSelect }: {
   useFrame(() => {
     const t = performance.now() / 1000 * (reducedMotion ? 0.3 : 1)
     const list = [...fleet.cur.values()].map((e) => e.v)
+    bodies.current!.worldToLocal(camera.getWorldPosition(eye)) // la cámara en coordenadas de la ciudad: en la maqueta (grupo escalado) distan distinto que en el mundo
     ids.current = list.map((v) => v.id)
     for (let i = 0; i < MAX; i++) {
       const v = list[i]
@@ -61,7 +64,7 @@ export function Vehicles({ height, lines, hidden, selected, onSelect }: {
       bodies.current!.setColorAt(i, c)
       // marcador con tamaño ~constante en pantalla: legible tanto en la vista general como de cerca
       const small = v.sim && v.id !== selected && v.state !== 'alerta' && v.state !== 'detenido' // la flota simulada: marcador más discreto
-      const size = Math.max(small ? 2 : 3, camera.position.distanceTo(o.position) * (small ? 0.0042 : 0.0065)) * (v.id === selected ? 1.6 : v.state === 'alerta' ? 1.35 : 1)
+      const size = Math.max(small ? 2 : 3, eye.distanceTo(o.position) * (small ? 0.0042 : 0.0065)) * (v.id === selected ? 1.6 : v.state === 'alerta' ? 1.35 : 1) * (inXR ? VR.beacon : 1)
       o.position.y = y + 8 + size * 2.2
       o.rotation.set(0, t, 0)
       o.scale.setScalar(size)
