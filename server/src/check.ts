@@ -78,7 +78,10 @@ if (centro) await fast(() => [...peek.jams.keys()].some((k: string) => /Prado|16
 ok((await open('congestion')) >= 1, 'alerta de congestión abierta en PostGIS')
 await fast(() => sim.snapshot().alerts.some((a) => a.kind === 'congestion' && String(a.detail.via).includes(`zona ${zone.hotspot.short}`)), 600, `la alerta indica la zona de ${zone.hotspot.short}`)
 ok(sim.snapshot().congestion.length > 0 && sim.snapshot().metrics.avgSpeedKmh > 0, 'los tramos congestionados se miden en la simulación')
-await fast(() => sim.routes.some((r) => r.detour), 120, 'se proponen desvíos')
+// En el Centro siempre hay rodeo. En otras zonas la cola puede formarse en la única entrada (p. ej. La Ceja, por la
+// Av. Héroes del Km 7 desde el borde del recuadro): ahí lo correcto es informar que no hay desvío dentro de la zona.
+if (centro) await fast(() => sim.routes.some((r) => r.detour), 120, 'se proponen desvíos')
+else await fast(() => sim.routes.some((r) => r.detour) || sim.events.some((e) => e.text.startsWith('Sin desvío disponible')), 120, 'se proponen desvíos o se informa que no hay rodeo dentro de la zona')
 const box = (await pool.query(`SELECT ST_XMin(e) w, ST_XMax(e) e, ST_YMin(e) s, ST_YMax(e) n FROM (SELECT ST_Extent(geom) e FROM road_segments) x`)).rows[0]
 ok(sim.routes.filter((r) => r.detour).every((r) => r.detour!.pts.every((p) => { const [lon, lat] = unproject(p); return lon >= box.w && lon <= box.e && lat >= box.s && lat <= box.n })), `los desvíos no salen de ${zone.name}`)
 ok((await sim.scenario('despejar')).startsWith('Control'), 'el agente de tránsito entra en acción')

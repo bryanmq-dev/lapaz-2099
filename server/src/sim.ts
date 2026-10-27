@@ -572,17 +572,22 @@ export class Simulator {
     return `Avería simulada: ${v.plate}`
   }
 
-  /** Un minibús de la 2.ª línea real corta camino por la plaza peatonal de la zona (en el Centro, Plaza Murillo, con la 204). */
+  /**
+   * Un minibús corta camino por la plaza peatonal de la zona (en el Centro, Plaza Murillo, con la 204). Lo intenta la línea real
+   * que pasa más cerca de la plaza (en el Centro, la 2.ª).
+   */
   private async enterPlaza() {
-    const code = this.realCodes[1]
     const { rows: [g] } = await this.pool.query(`SELECT name, ST_X(c) lon, ST_Y(c) lat FROM (SELECT name, ST_Centroid(geom) c FROM geofences WHERE kind = 'restringida' LIMIT 1) x`)
     if (!g) return 'La zona no tiene una plaza peatonal para este escenario'
     const plaza = this.proj.project([g.lon, g.lat])
     const name = String(g.name).replace(/ \(sin tránsito vehicular\)$/, '')
+    const near = (c: string) => Math.min(...this.routes.filter((r) => r.code === c).map((r) => dist(r.base.at(r.base.locate(plaza)).p, plaza)))
+    const code = this.zone.id === 'centro' ? this.realCodes[1] : [...this.realCodes].sort((a, b) => near(a) - near(b))[0]
+    const reach = Math.max(200, near(code) + 60) // la plaza puede quedar a algunas cuadras de la línea
     for (const v of this.vehicles) {
       if (v.code !== code || v.phase !== 'ruta' || v.offPlan || v.path !== v.route.active) continue
       const m = v.path.locate(plaza)
-      if (dist(v.path.at(m).p, plaza) > 200 || v.progress > m - 60) continue
+      if (dist(v.path.at(m).p, plaza) > reach || v.progress > m - 60) continue
       v.path = new Path([...v.path.slice(0, m - 50), plaza, ...v.path.slice(m + 50, v.path.length)])
       v.segAt = this.sampleSegments(v.path)
       v.offPlan = true

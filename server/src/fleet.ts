@@ -47,7 +47,7 @@ interface FleetLine { a: number; b: number; an: string; bn: string; regular: num
 
 /**
  * Zonas nuevas: las líneas salen solas de los hitos de la zona y de 8 puntos en los bordes del recuadro.
- * 12 líneas cruzan el hotspot (llevan el refuerzo de hora punta) y 10 recorren la zona sin cruzarlo necesariamente.
+ * Hasta 12 líneas cortas cruzan el hotspot (llevan el refuerzo de hora punta) y 10 largas recorren la zona.
  * ponytail: selección codiciosa por dirección de llegada al hotspot; calibrar por zona si la cola no se forma.
  */
 function autoLines(db: ZoneDb, graph: RoadGraph, hot: XZ): FleetLine[] {
@@ -74,8 +74,11 @@ function autoLines(db: ZoneDb, graph: RoadGraph, hot: XZ): FleetLine[] {
   }
   cands.sort((x, y) => y.len - x.len)
   const picked: typeof cands = []
-  // las que cruzan el hotspot: en ronda por sector de llegada (N, E, S, O) para que la cola se forme desde varios lados
-  const bySector = [0, 1, 2, 3].map((k) => cands.filter((c) => c.crosses && c.sector === k))
+  // las que cruzan el hotspot: trayectos cortos (1,2–3,5 km, primero los más cortos), como en el Centro, donde el refuerzo
+  // sale a menos de 1 km del Obelisco; con trayectos largos la hora punta tarda demasiado en terminar.
+  // En ronda por sector de llegada (N, E, S, O) para que la cola se forme desde varios lados.
+  const short = cands.filter((c) => c.crosses && c.len >= 1200 && c.len <= 3500).sort((x, y) => x.len - y.len)
+  const bySector = [0, 1, 2, 3].map((k) => short.filter((c) => c.sector === k))
   for (let round = 0; picked.length < 12 && bySector.some((l) => l.length > round); round++)
     for (const l of bySector) if (l[round] && picked.length < 12) picked.push(l[round])
   const crossing = picked.length

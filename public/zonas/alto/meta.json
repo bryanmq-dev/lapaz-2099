@@ -4,9 +4,11 @@
     "elevation": 321761,
     "streets": 320954,
     "areas": 52351,
-    "buildings": 553589,
-    "buildings-extra": 2393688,
-    "landmarks": 1123
+    "buildings": 924188,
+    "buildings-extra": 2023089,
+    "landmarks": 1123,
+    "routes": 7218,
+    "lines": 2047
   },
   "name": "El Alto",
   "bbox": {

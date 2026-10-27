@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import pg from 'pg'
-import { projector, type Projector } from './geo.ts'
+import { distToLine, projector, type Projector, type XZ } from './geo.ts'
 import type { Zone } from '../../shared/zones.ts'
 
 const here = import.meta.dirname
@@ -115,6 +115,26 @@ export async function addStopFences(client: pg.PoolClient, zone: Zone) {
   )
 }
 
+/**
+ * Plaza peatonal de la zona para el escenario «Ingreso a geocerca»: la plaza con nombre más cercana a alguna línea real.
+ * Polígono de OSM si existe; si la plaza solo está mapeada como punto (hito), un círculo de PLAZA_R m.
+ */
+const PLAZA_R = 12
+function nearestPlaza({ proj, data }: ZoneDb, areas: any[], landmarks: any[], routes: any[]) {
+  const line = routes.flatMap((r: any) => r.pts.map(proj.project))
+  const away = (at: [number, number]) => { const p = proj.project(at); return Math.min(...line.map((q: [number, number]) => Math.hypot(q[0] - p[0], q[1] - p[1]))) }
+  // un hito-punto puede estar junto a la calzada: su círculo (PLAZA_R) no debe tocar ninguna vía transitable, o la flota
+  // normal «entraría» a la geocerca
+  const roads = data('roads.json').map((r: any) => r.pts.map(proj.project) as XZ[])
+  const clear = (at: [number, number]) => { const p = proj.project(at); return roads.every((pts: XZ[]) => distToLine(p, pts) > PLAZA_R + 4) }
+  const center = (pts: [number, number][]) => pts.reduce((s, p) => [s[0] + p[0] / pts.length, s[1] + p[1] / pts.length], [0, 0]) as [number, number]
+  const cands = [
+    ...areas.filter((a: any) => a.n && /square|pedestrian/.test(a.k) && a.pts.length >= 3).map((a: any) => ({ n: a.n, pts: a.pts, d: away(center(a.pts)) })),
+    ...landmarks.filter((l: any) => /^plaza/i.test(l.label) && clear(l.at)).map((l: any) => ({ n: l.label, at: l.at, d: away(l.at) })),
+  ]
+  return cands.sort((x, y) => x.d - y.d)[0] as { n: string; pts?: [number, number][]; at?: [number, number] } | undefined
+}
+
 /** Vehículos por línea real (simulación; ver docs/caso-estudio-rutas.md). Las líneas sin dato llevan 8. */
 export const FLEET: Record<string, number> = { '212': 10, '204': 8, '453': 8 }
 
@@ -150,16 +170,11 @@ export async function seed(db: ZoneDb) {
     // Geocercas: una plaza peatonal (polígono real de OSM), paradas, terminales del tramo y zonas escolares.
     // En el Centro es Plaza Murillo; en las demás zonas, la plaza con nombre más cercana a la segunda línea real
     // (la que usa el escenario «Ingreso a geocerca»).
-    const plaza = zone.id === 'centro' ? areas.find((a: any) => a.n === 'Plaza Murillo') : (await client.query(
-      `WITH a AS (SELECT * FROM json_to_recordset($1::json) AS x(n text, pts json))
-       SELECT a.n, a.pts FROM a, routes r WHERE r.code = $2
-       ORDER BY ST_Distance(r.geom::geography, ST_Centroid(ST_MakePolygon(ST_SetSRID(ST_GeomFromGeoJSON(json_build_object('type','LineString','coordinates', a.pts)::text), 4326)))::geography)
-       LIMIT 1`,
-      [JSON.stringify(areas.filter((a: any) => a.n && /square|pedestrian/.test(a.k) && a.pts.length >= 3).map((a: any) => ({ n: a.n, pts: [...a.pts, a.pts[0]] }))), lines[1].code])).rows[0]
+    const plaza = zone.id === 'centro' ? { n: 'Plaza Murillo', ...areas.find((a: any) => a.n === 'Plaza Murillo') } : nearestPlaza(db, areas, landmarks, routes)
     if (plaza) await client.query(
       `INSERT INTO geofences (name, kind, max_dwell_s, geom) VALUES ($2 || ' (sin tránsito vehicular)', 'restringida', NULL,
-        ST_SetSRID(ST_GeomFromGeoJSON($1), 4326))`,
-      [JSON.stringify({ type: 'Polygon', coordinates: [zone.id === 'centro' ? [...plaza.pts, plaza.pts[0]] : plaza.pts] }), plaza.n],
+        CASE WHEN $3::float8 > 0 THEN ST_Buffer(ST_SetSRID(ST_GeomFromGeoJSON($1), 4326)::geography, $3)::geometry ELSE ST_SetSRID(ST_GeomFromGeoJSON($1), 4326) END)`,
+      [JSON.stringify(plaza.pts ? { type: 'Polygon', coordinates: [[...plaza.pts, plaza.pts[0]]] } : { type: 'Point', coordinates: plaza.at }), plaza.n, plaza.pts ? 0 : PLAZA_R],
     )
     await addStopFences(client, zone)
     await client.query(

@@ -46,7 +46,11 @@ export const ZONES: Zone[] = [
     hotspot: { name: 'La Ceja', short: 'La Ceja', at: [-68.1628, -16.5048] },
     tall: { axis: [[-68.175, -16.5185], [-68.1628, -16.5048], [-68.1545, -16.5005]], base: [12, 7, 5] }, // Av. 6 de Marzo → La Ceja → bajada de la Autopista
     landmarks: 'Plaza|Mercado|Feria|Terminal|Estación|Iglesia|Parque|Ceja|Mirador',
-    lines: [],
+    lines: [ // minibuses con ida y vuelta y más recorrido dentro del recuadro (scripts/zonas/fetch.ts --discover)
+      { code: '212', ida: 9381528, vuelta: 9393419 },
+      { code: '731', ida: 9394021, vuelta: 9394239 },
+      { code: '267', ida: 19980924, vuelta: 20619663 },
+    ],
   },
   {
     id: 'sopocachi', name: 'Sopocachi', district: 'sopocachi',

@@ -1,0 +1,44 @@
+[
+  {
+    "code": "212",
+    "mode": "minibus",
+    "union": "Sindicato COTRANSTUR",
+    "color": "#00D5FF",
+    "termini": "Plaza Isabel la Católica ↔ Aeropuerto Internacional El Alto",
+    "corridor": "En la zona: Autopista Héroes de la Guerra del Chaco → La Ceja (Av. 6 de Marzo) → Av. Héroes del Km 7, hacia el aeropuerto",
+    "fare": "Bs 3,00 tramo corto · Bs 3,50 tramo largo (diurna); Bs 3,30 / 3,80 nocturna",
+    "schedule": "05:30–22:30 aprox.",
+    "headway": "8–12 min",
+    "headwayMin": 10,
+    "notes": "La misma línea del caso del Centro: sube por la Autopista y cruza La Ceja rumbo al aeropuerto. Es el enlace directo entre las dos zonas.",
+    "assumed": []
+  },
+  {
+    "code": "731",
+    "mode": "minibus",
+    "union": "Sin operador registrado en OSM",
+    "color": "#FFB547",
+    "termini": "Calle 3 ↔ Zona Ventilla",
+    "corridor": "Ida: Calle Alfredo Franco Valle → Calle 3 · Vuelta: Calle 3 → Calle Jorge Carrasco → Calle 5 → Av. 6 de Marzo",
+    "fare": "Bs 1,50–2,00 (supuesto: tarifa de minibús urbano en El Alto)",
+    "schedule": "06:00–21:30 (supuesto)",
+    "headway": "8–12 min (supuesto)",
+    "headwayMin": 10,
+    "notes": "Línea propia de El Alto que recorre calles de barrio junto a La Ceja. En OSM la vuelta usa la Av. 6 de Marzo en un sentido marcado como contrario (anotado en routes.json).",
+    "assumed": ["union", "fare", "schedule", "headway"]
+  },
+  {
+    "code": "267",
+    "mode": "minibus",
+    "union": "Sindicato de transporte mixto «Simón Bolívar»",
+    "color": "#B39CFF",
+    "termini": "Jurisdicción ciudad de El Alto ↔ Tiquina",
+    "corridor": "En la zona: Av. Naciones Unidas",
+    "fare": "Tarifa interprovincial por tramo (supuesto: sin fuente pública)",
+    "schedule": "05:00–20:00 (supuesto)",
+    "headway": "15–20 min (supuesto)",
+    "headwayMin": 15,
+    "notes": "Minibús interprovincial hacia el lago Titicaca (Tiquina); en el recuadro solo recorre la Av. Naciones Unidas.",
+    "assumed": ["fare", "schedule", "headway"]
+  }
+]

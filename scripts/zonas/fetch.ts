@@ -5,13 +5,13 @@
 //   node scripts/zonas/fetch.ts --discover …  → lista las rutas de transporte OSM de la zona para elegir las 3 líneas
 // Fuentes: OpenStreetMap vía Overpass (© OpenStreetMap contributors, ODbL) y
 // mosaicos de elevación Terrarium (AWS Terrain Tiles, derivados de SRTM y otros).
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { inflateSync } from 'node:zlib'
 import { join } from 'node:path'
 import { ZONES, type Zone } from '../../shared/zones.ts'
 
 const MARGIN_M = 450 // el terreno se extiende un poco más allá del recuadro
-const CORE_H = 11    // edificios principales: todos los reales de OSM, los que tienen nombre y los estimados de esta altura o más
+const CORE_SHARE = 0.3 // edificios principales: todos los reales de OSM, los que tienen nombre y este 30 % (los más altos) de los estimados
 // la zona en proceso: las funciones de abajo leen estos valores (se fijan en main para cada zona)
 let ZONE: Zone = ZONES[0]
 let BBOX = ZONE.bbox
@@ -438,7 +438,17 @@ function clipToBox(line: LL[]): LL[] {
 async function routes(streetEls: any[], segs: Seg[]) {
   if (!ZONE.lines.length) { console.log('  ! la zona aún no tiene líneas elegidas (usar --discover)'); return }
   const ids = ZONE.lines.flatMap((c) => [c.ida, c.vuelta])
-  const raw = await overpass(`routes-${ids.join('-')}`, `[out:json][timeout:180];relation(id:${ids.join(',')});out geom;`)
+  // una relación ya descargada para otra zona (p. ej. la 212, que pasa por el Centro y El Alto) no se vuelve a pedir
+  const known = new Map<number, any>()
+  for (const dir of readdirSync('scripts/zonas/.cache')) for (const f of readdirSync(join('scripts/zonas/.cache', dir)).filter((x) => x.startsWith('routes-'))) {
+    for (const r of JSON.parse(readFileSync(join('scripts/zonas/.cache', dir, f), 'utf8')).elements) known.set(r.id, r)
+  }
+  const missing = ids.filter((id) => !known.has(id))
+  if (missing.length) {
+    const got = await overpass(`routes-${missing.join('-')}`, `[out:json][timeout:180];relation(id:${missing.join(',')});out geom;`)
+    for (const r of got.elements) known.set(r.id, r)
+  }
+  const raw = { elements: ids.map((id) => known.get(id)) }
   const wayTags = new Map<number, Record<string, string>>(streetEls.map((w) => [w.id, w.tags]))
   const out: any[] = []
   for (const c of ZONE.lines) for (const dir of ['ida', 'vuelta'] as const) {
@@ -511,8 +521,11 @@ async function build(zone: Zone) {
   const { buildings: real, areas } = await buildingsAndAreas(sample)
   const streetsOut = JSON.parse(readFileSync(join(OUT, 'streets.json'), 'utf8'))
   const est = infill(streetsOut, real, areas, sample)
-  // dos archivos: la calidad baja del front solo descarga los principales (~40 % del peso); el resto, en buildings-extra.json
-  const all = [...real, ...est], core = (b: any) => !b.e || b.n || b.h >= CORE_H
+  // dos archivos: la calidad baja del front solo descarga los principales; el resto, en buildings-extra.json.
+  // El corte es por proporción y no por altura fija: en El Alto casi todos los lotes estimados son bajos.
+  const all = [...real, ...est]
+  const cut = est.map((b: any) => b.h).sort((a: number, b: number) => b - a)[Math.floor(est.length * CORE_SHARE)] ?? 0
+  const core = (b: any) => !b.e || b.n || b.h > cut
   writeFileSync(join(OUT, 'buildings.json'), JSON.stringify(all.filter(core)))
   writeFileSync(join(OUT, 'buildings-extra.json'), JSON.stringify(all.filter((b) => !core(b))))
   console.log(`  ✓ buildings.json: ${real.length} reales de OSM + ${est.length} estimados (relleno de manzanas)`)
