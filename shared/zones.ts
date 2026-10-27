@@ -1,7 +1,7 @@
 // Zonas con vista detallada. Lo usan el script de datos (scripts/zonas/fetch.ts), la API (server/src) y el front.
 // Solo datos: sin dependencias de Node ni del navegador.
 
-export type ZoneId = 'centro' | 'alto' | 'sopocachi' | 'calacoto' | 'miraflores' | 'fatima'
+export type ZoneId = 'centro' | 'alto' | 'sopocachi' | 'calacoto'
 export type LL = [number, number] // [lon, lat]
 
 export interface ZoneLine {
@@ -64,24 +64,6 @@ export const ZONES: Zone[] = [
     hotspot: { name: 'Av. Ballivián y Calle 21', short: 'Calle 21', at: [-68.0838, -16.5413] },
     tall: { axis: [[-68.0915, -16.5345], [-68.0838, -16.5413], [-68.0745, -16.5470]], base: [18, 9, 5] }, // Av. Ballivián
     landmarks: 'Plaza|Mercado|Parque|Iglesia|Centro Comercial|Megacenter|Estadio|Club|Universidad',
-    lines: [],
-  },
-  {
-    id: 'miraflores', name: 'Miraflores', district: 'miraflores',
-    bbox: { s: -16.511, w: -68.128, n: -16.487, e: -68.098 },
-    origin: { lat: -16.4995, lon: -68.1205 }, // Estadio Hernando Siles
-    hotspot: { name: 'Av. Busch y Av. Saavedra', short: 'Av. Busch', at: [-68.1205, -16.4958] },
-    tall: { axis: [[-68.1260, -16.5020], [-68.1205, -16.4958], [-68.1135, -16.4900]], base: [12, 8, 5] }, // Av. Saavedra
-    landmarks: 'Plaza|Mercado|Parque|Iglesia|Estadio|Hospital|Facultad|Universidad|Monumento',
-    lines: [],
-  },
-  {
-    id: 'fatima', name: 'Villa Fátima', district: 'villa',
-    bbox: { s: -16.494, w: -68.128, n: -16.470, e: -68.098 },
-    origin: { lat: -16.4815, lon: -68.1135 }, // Plaza de Villa Fátima
-    hotspot: { name: 'Av. de las Américas', short: 'Las Américas', at: [-68.1132, -16.4808] },
-    tall: { axis: [[-68.1210, -16.4880], [-68.1132, -16.4808], [-68.1060, -16.4745]], base: [10, 7, 4] }, // Av. de las Américas
-    landmarks: 'Plaza|Mercado|Parque|Iglesia|Terminal|Estación|Cementerio|Hospital',
     lines: [],
   },
 ]

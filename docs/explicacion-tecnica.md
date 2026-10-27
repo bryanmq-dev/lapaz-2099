@@ -51,7 +51,7 @@ El proyecto no dice en ningún sitio que los datos simulados sean reales: la int
 - **Arranque de la API** (`server/src/server.ts`): espera a PostGIS → para el Centro: `openZone()` (crea el esquema y aplica `db/migrations/*.sql` pendientes) → `seed()` (datos y flota real, solo si el esquema está vacío) → `seedFleet()` (flota simulada, idempotente) → `sim.init()` → escucha en `:3001`. Después prepara las demás zonas en segundo plano, una tras otra.
 - **Zonas** (`shared/zones.ts`): cada zona define su recuadro, el origen de su proyección, su hotspot de hora punta y sus 3 líneas reales. La usan el script de datos, la API y el front.
 - **Un esquema de PostgreSQL por zona**: el Centro vive en `public` y las demás en `z_alto`, `z_sopocachi`, etc. Las tablas y las consultas son idénticas; la conexión de cada zona fija su `search_path`. Así las zonas no se mezclan sin tener que agregar una columna `zone` a cada tabla y a cada consulta.
-- **Simulación bajo demanda**: una zona solo hace ticks mientras alguien mira su stream (y 60 s más). Seis zonas caben en una laptop modesta.
+- **Simulación bajo demanda**: una zona solo hace ticks mientras alguien mira su stream (y 60 s más). Varias zonas caben en una laptop modesta.
 
 ## 3. Origen de los datos
 

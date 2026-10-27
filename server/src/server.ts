@@ -36,7 +36,7 @@ function zone(id: ZoneId): Promise<Live> {
   return z
 }
 
-/** Simula solo mientras alguien mira la zona (más 60 s): así seis zonas caben en una laptop. */
+/** Simula solo mientras alguien mira la zona (más 60 s): así varias zonas caben en una laptop. */
 function watch(live: Live) {
   live.viewers++
   if (live.idle) { clearTimeout(live.idle); live.idle = null }

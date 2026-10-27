@@ -3,7 +3,7 @@
 Gemelo digital de La Paz con dos vistas:
 
 1. **Ciudad**: visión conceptual de toda la ciudad (simulación en el navegador).
-2. **Zonas en detalle**: el Centro, El Alto, Sopocachi, Calacoto, Miraflores y Villa Fátima, reconstruidos con datos reales de OpenStreetMap y elevación SRTM. Cada zona muestra el seguimiento de 3 líneas reales y de una flota simulada de minibuses, con alertas espaciales en PostGIS, una hora punta que congestiona sola su cruce principal y desvíos sugeridos dentro de la zona. Se puede ver como maqueta en VR, en realidad mixta (Quest, Android) o con AR Quick Look (iPad, iPhone).
+2. **Zonas en detalle**: el Centro, El Alto, Sopocachi y Calacoto, reconstruidos con datos reales de OpenStreetMap y elevación SRTM. Cada zona muestra el seguimiento de 3 líneas reales y de una flota simulada de minibuses, con alertas espaciales en PostGIS, una hora punta que congestiona sola su cruce principal y desvíos sugeridos dentro de la zona. Se puede ver como maqueta en VR, en realidad mixta (Quest, Android) o con AR Quick Look (iPad, iPhone).
 
 Todos los datos de flota, tráfico y alertas son **simulados**. Ver [docs/fuentes.md](docs/fuentes.md) (de dónde sale cada dato), [docs/caso-estudio-rutas.md](docs/caso-estudio-rutas.md), [docs/explicacion-tecnica.md](docs/explicacion-tecnica.md) (cómo funciona todo, de punta a punta) y [CHANGELOG.md](CHANGELOG.md).
 

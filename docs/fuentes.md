@@ -16,8 +16,6 @@ Configuración en [`shared/zones.ts`](../shared/zones.ts). Los datos se generan 
 | El Alto | −16.522, −68.182, −16.498, −68.152 | La Ceja | La Ceja | [zonas/alto.md](zonas/alto.md) |
 | Sopocachi | −16.526, −68.142, −16.502, −68.112 | Plaza Abaroa | Plaza Abaroa | [zonas/sopocachi.md](zonas/sopocachi.md) |
 | Calacoto | −16.552, −68.096, −16.528, −68.066 | Calle 21 de Calacoto | Av. Ballivián y Calle 21 | [zonas/calacoto.md](zonas/calacoto.md) |
-| Miraflores | −16.511, −68.128, −16.487, −68.098 | Estadio Hernando Siles | Av. Busch y Av. Saavedra | [zonas/miraflores.md](zonas/miraflores.md) |
-| Villa Fátima | −16.494, −68.128, −16.470, −68.098 | Plaza de Villa Fátima | Av. de las Américas | [zonas/fatima.md](zonas/fatima.md) |
 
 Cada recuadro mide unos 3,2 × 2,7 km, como el del Centro. Los hotspots son una **elección del proyecto**: un cruce de avenidas troncales donde convergen varias líneas. No vienen de un estudio de tráfico.
 
