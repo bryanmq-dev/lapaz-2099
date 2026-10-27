@@ -9,7 +9,7 @@ import { FILLER_BUS, getTheme } from '../theme'
 import { makeHeight, project, type CentroData } from './data'
 import { VEHICLE_SCALE } from './FleetLayers'
 import { drape } from './geometry'
-import { minibusGeometry, trufiGeometry } from './minibus'
+import { minibusGeometry, SPECS, trufiGeometry } from './minibus'
 import { fleet, vehiclePos } from './useFleet'
 import { request, unpack } from './useZoneGeometry'
 
@@ -45,7 +45,8 @@ export async function openQuickLook(data: CentroData) {
 
   // vehículos en su posición actual: una malla por color (USDZ no tiene instancias)
   const lineColor = new Map(data.lines.map((l) => [l.code, l.color]))
-  const models = { van: minibusGeometry(), car: trufiGeometry() }
+  // USDZ va sin comprimir: el modelo detallado solo para las 3 líneas reales; la flota simulada, una caja con sus medidas
+  const models = { van: minibusGeometry(), car: trufiGeometry(), box: new THREE.BoxGeometry(SPECS.minibus.W, SPECS.minibus.H, SPECS.minibus.L).translate(0, SPECS.minibus.H / 2, 0) }
   const byColor = new Map<string, THREE.BufferGeometry[]>()
   const o = new THREE.Object3D()
   for (const { v } of fleet.cur.values()) {
@@ -56,8 +57,8 @@ export async function openQuickLook(data: CentroData) {
     o.scale.setScalar(VEHICLE_SCALE)
     o.updateMatrix()
     const color = v.state === 'alerta' ? '#ff5470' : lineColor.get(v.code) ?? FILLER_BUS[light ? 'light' : 'dark']
-    const geo = (v.kind === 'trufi' ? models.car : models.van).clone().applyMatrix4(o.matrix)
-    geo.deleteAttribute('color')
+    const geo = (v.sim ? models.box.toNonIndexed() : (v.kind === 'trufi' ? models.car : models.van).clone()).applyMatrix4(o.matrix)
+    for (const a of ['color', 'uv']) if (geo.getAttribute(a)) geo.deleteAttribute(a)
     byColor.set(color, [...(byColor.get(color) ?? []), geo])
   }
   for (const [color, list] of byColor) add(mergeGeometries(list)!, color)

@@ -7,10 +7,11 @@ import { useSyncExternalStore } from 'react'
  */
 export type Tier = 'alta' | 'media' | 'baja'
 
-export const TIERS: Record<Tier, { dpr: number; antialias: boolean; minH: number; windows: boolean; labels: number }> = {
-  alta: { dpr: 1.75, antialias: true, minH: 0, windows: true, labels: 20 },
-  media: { dpr: 1.25, antialias: true, minH: 4, windows: true, labels: 10 },
-  baja: { dpr: 1, antialias: false, minH: 7, windows: false, labels: 6 }, // minH: sin edificios bajos sin nombre; windows: sin el shader de ventanas
+// las ventanas de los edificios se dibujan en todos los niveles: sin ellas la ciudad se ve plana
+export const TIERS: Record<Tier, { dpr: number; antialias: boolean; minH: number; labels: number }> = {
+  alta: { dpr: 1.75, antialias: true, minH: 0, labels: 20 },
+  media: { dpr: 1.25, antialias: true, minH: 4, labels: 10 },
+  baja: { dpr: 1, antialias: false, minH: 7, labels: 6 }, // minH: sin edificios bajos sin nombre
 }
 
 function initial(): Tier {

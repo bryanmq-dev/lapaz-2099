@@ -100,9 +100,7 @@ export function buildingsGeometry(list: Building[], minElev: number, light = fal
   return g
 }
 
-/** `windows: false` (calidad baja): material Lambert sin el patrón de ventanas, mucho más barato por píxel. */
-export function buildingsMaterial(light = false, windows = true) {
-  if (!windows) return new THREE.MeshLambertMaterial({ vertexColors: true })
+export function buildingsMaterial(light = false) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 })
   m.onBeforeCompile = (s) => {
     s.vertexShader = s.vertexShader
@@ -139,7 +137,8 @@ export function streetGeometries(streets: Street[], height: HeightFn) {
     else asphalt.push(ribbon(pts, w, 0))
     if (MAJOR.test(s.hw)) glow.push(ribbon(pts, 0.9, 0.12))
   }
-  return { asphalt: mergeGeometries(asphalt)!, glow: mergeGeometries(glow)!, minor: mergeGeometries(minor)! }
+  const merge = (l: THREE.BufferGeometry[]) => (l.length ? mergeGeometries(l)! : new THREE.BufferGeometry()) // una zona puede no tener escalinatas ni peatonales
+  return { asphalt: merge(asphalt), glow: merge(glow), minor: merge(minor) }
 }
 
 export function areasGeometry(areas: Area[], height: HeightFn, keep: (a: Area) => boolean) {

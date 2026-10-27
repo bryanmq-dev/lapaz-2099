@@ -57,7 +57,7 @@ export function Lines({ lines, routes, hidden, onToggle, snap }: {
                 <span className="line-code">{l.code}</span>
                 <button className="line-main" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : l.code)}>
                   <b>{l.union}</b>
-                  <small>{l.mode === 'trufi' ? 'Trufi' : 'Minibús'} · {active} en el Centro · {r.map((x) => `${x.direction} ${x.km} km`).join(' · ')}</small>
+                  <small>{l.mode === 'trufi' ? 'Trufi' : 'Minibús'} · {active} en la zona · {r.map((x) => `${x.direction} ${x.km} km`).join(' · ')}</small>
                 </button>
                 <button className="icon-btn sm" aria-pressed={!hidden.has(l.code)} title={hidden.has(l.code) ? 'Mostrar línea' : 'Ocultar línea'}
                   aria-label={`${hidden.has(l.code) ? 'Mostrar' : 'Ocultar'} línea ${l.code}`} onClick={() => onToggle(l.code)}>
@@ -156,7 +156,7 @@ export function AlertsPanel({ snap, onPick }: { snap: Snapshot | null; onPick: (
         <div key={`${r.code}${r.direction}`} className="reco-card lv-box-warn">
           <b>Desvío sugerido · Línea {r.code} ({r.direction})</b>
           <span>{r.via.slice(0, 5).join(' → ')}</span>
-          <small>{r.extraM >= 0 ? '+' : ''}{r.extraM} m · ~{r.extraMin} min · camino más corto en la red vial del Centro (Dijkstra, respeta sentido único)</small>
+          <small>{r.extraM >= 0 ? '+' : ''}{r.extraM} m · ~{r.extraMin} min · camino más corto en la red vial de la zona (Dijkstra, respeta sentido único)</small>
         </div>
       ))}
     </Section>

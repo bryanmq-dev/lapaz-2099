@@ -27,7 +27,7 @@ function Static({ data, height, inXR }: { data: CentroData; height: HeightFn; in
   const minH = inXR ? Math.max(VR.minBuildingH, q.minH) : q.minH
   const { geo } = useZoneGeometry(data.meta.zone, light, minH)
   const terrainMat = useMemo(() => contourMaterial({ density: 0.1, intensity: light ? 0.04 : 0.14, fadeFrom: 9000, fadeTo: 9999 }), [light])
-  const buildingsMat = useMemo(() => buildingsMaterial(light, q.windows), [light, q.windows])
+  const buildingsMat = useMemo(() => buildingsMaterial(light), [light])
   if (!geo) return null
 
   return (
