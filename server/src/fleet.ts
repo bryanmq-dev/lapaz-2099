@@ -1,7 +1,7 @@
-// Flota simulada de refuerzo: líneas S01… sobre la red vial real del Centro.
+// Flota simulada de refuerzo: líneas S01… sobre la red vial real de cada zona.
 // Las calles y los sentidos únicos son reales (OSM); las líneas, los choferes y las placas son ficticios.
-import { addStopFences, addStops, data, FIRST, LAST, LETTERS, pool, rng } from './db.ts'
-import { Path, dist, project, toGeoJSONLine, type LL } from './geo.ts'
+import { addStopFences, addStops, FIRST, LAST, LETTERS, rng, type ZoneDb } from './db.ts'
+import { Path, dist, toGeoJSONLine, type LL, type XZ } from './geo.ts'
 import { RoadGraph } from './graph.ts'
 
 const P: Record<string, LL> = {
@@ -19,7 +19,7 @@ const NAME: Record<string, string> = {
 }
 
 /**
- * a↔b: extremos de la línea. regular: unidades en servicio todo el día. reserve: unidades de refuerzo de hora punta.
+ * Centro (a mano). a↔b: extremos de la línea. regular: unidades en servicio todo el día. reserve: unidades de refuerzo de hora punta.
  * Las 14 primeras cruzan el Obelisco (por la Av. Camacho, la Mcal. Santa Cruz o El Prado) y salen de plazas a menos de 1 km;
  * las demás no pasan por él. Las rutas son las más cortas por avenidas y respetan los sentidos únicos.
  */
@@ -39,18 +39,61 @@ const LINES: { a: string; b: string; regular: number; reserve: number }[] = [
   { a: 'Garita', b: 'S', regular: 13, reserve: 0 }, { a: 'Garita', b: 'NE', regular: 13, reserve: 0 },
   { a: 'Eguino', b: 'SE', regular: 13, reserve: 0 }, { a: 'MRodriguez', b: 'NE', regular: 13, reserve: 0 },
 ]
-const OBELISCO = project([-68.135081, -16.498602])
 const COLORS = ['#7FA8C9', '#9CB4C8', '#8FB5B0', '#A9B8C9']
 const UNION = 'Flota simulada (refuerzo)'
+const arterial = (s: { highway: string }) => (/primary|trunk|secondary/.test(s.highway) ? 0.75 : /tertiary/.test(s.highway) ? 1 : 1.5)
 
-/** Crea las líneas, choferes y vehículos simulados si aún no existen (idempotente). */
-export async function seedFleet() {
+interface FleetLine { a: number; b: number; an: string; bn: string; regular: number; reserve: number }
+
+/**
+ * Zonas nuevas: las líneas salen solas de los hitos de la zona y de 8 puntos en los bordes del recuadro.
+ * 12 líneas cruzan el hotspot (llevan el refuerzo de hora punta) y 10 recorren la zona sin cruzarlo necesariamente.
+ * ponytail: selección codiciosa por dirección de llegada al hotspot; calibrar por zona si la cola no se forma.
+ */
+function autoLines(db: ZoneDb, graph: RoadGraph, hot: XZ): FleetLine[] {
+  const { zone, proj } = db
+  const { s, w, n, e } = zone.bbox, dy = 0.0014, dx = 0.0015 // ~150 m hacia dentro
+  const edges: [string, LL][] = [
+    ['borde norte', [(w + e) / 2, n - dy]], ['borde sur', [(w + e) / 2, s + dy]], ['borde este', [e - dx, (s + n) / 2]], ['borde oeste', [w + dx, (s + n) / 2]],
+    ['borde noreste', [e - dx, n - dy]], ['borde noroeste', [w + dx, n - dy]], ['borde sureste', [e - dx, s + dy]], ['borde suroeste', [w + dx, s + dy]],
+  ]
+  const anchors = new Map<number, string>()
+  for (const [name, at] of [...db.data('landmarks.json').map((l: any) => [l.label, l.at] as [string, LL]), ...edges]) {
+    const node = graph.nearestNode(proj.project(at))
+    if (!anchors.has(node)) anchors.set(node, name)
+  }
+  const ids = [...anchors.keys()]
+  const cands: { a: number; b: number; len: number; sector: number; crosses: boolean }[] = []
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+    const go = graph.shortestPath(ids[i], ids[j], arterial), back = graph.shortestPath(ids[j], ids[i], arterial)
+    if (!go || !back || go.length < 900) continue
+    const cross = [go, back].map((p) => { const path = new Path(p.pts), at = path.locate(hot); return dist(path.at(at).p, hot) < 40 && at > 80 ? path.at(at - 60).p : null })
+    const from = cross.find((x) => x)
+    const sector = from ? Math.round(((Math.atan2(from[0] - hot[0], -(from[1] - hot[1])) * 180) / Math.PI + 360) % 360 / 90) % 4 : -1
+    cands.push({ a: ids[i], b: ids[j], len: go.length, sector, crosses: !!from })
+  }
+  cands.sort((x, y) => y.len - x.len)
+  const picked: typeof cands = []
+  // las que cruzan el hotspot: en ronda por sector de llegada (N, E, S, O) para que la cola se forme desde varios lados
+  const bySector = [0, 1, 2, 3].map((k) => cands.filter((c) => c.crosses && c.sector === k))
+  for (let round = 0; picked.length < 12 && bySector.some((l) => l.length > round); round++)
+    for (const l of bySector) if (l[round] && picked.length < 12) picked.push(l[round])
+  const crossing = picked.length
+  for (const c of cands) { if (picked.length >= crossing + 10) break; if (!picked.includes(c)) picked.push(c) }
+  return picked.map((c, i) => ({ a: c.a, b: c.b, an: anchors.get(c.a)!, bn: anchors.get(c.b)!, regular: i < crossing ? 3 : 10, reserve: i < crossing ? 4 : 0 }))
+}
+
+/** Crea las líneas, choferes y vehículos simulados de la zona si aún no existen (idempotente). */
+export async function seedFleet(db: ZoneDb) {
+  const { pool, zone, proj } = db
   if ((await pool.query(`SELECT 1 FROM routes WHERE simulated LIMIT 1`)).rowCount) return
   const rows = (await pool.query(`SELECT id, name, highway, oneway, source, target, length_m, congestion, ST_AsGeoJSON(geom)::json->'coordinates' coords FROM road_segments`)).rows
-  const graph = new RoadGraph(rows)
-  const arterial = (s: { highway: string }) => (/primary|trunk|secondary/.test(s.highway) ? 0.75 : /tertiary/.test(s.highway) ? 1 : 1.5)
-  const node = (k: string) => graph.nearestNode(project(P[k]))
-  const landmarks = data('landmarks.json')
+  const graph = new RoadGraph(proj.project, rows)
+  const hot = proj.project(zone.hotspot.at)
+  const lines: FleetLine[] = zone.id === 'centro'
+    ? LINES.map((l) => ({ a: graph.nearestNode(proj.project(P[l.a])), b: graph.nearestNode(proj.project(P[l.b])), an: NAME[l.a], bn: NAME[l.b], regular: l.regular, reserve: l.reserve }))
+    : autoLines(db, graph, hot)
+  const landmarks = db.data('landmarks.json')
   const rand = rng(1912)
   const plates = new Set<string>((await pool.query(`SELECT plate FROM vehicles`)).rows.map((r) => r.plate))
   let n = (await pool.query(`SELECT count(*)::int n FROM users`)).rows[0].n + 100
@@ -60,11 +103,11 @@ export async function seedFleet() {
     await client.query('BEGIN')
     const { rows: [u] } = await client.query(`INSERT INTO unions (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`, [UNION])
     const codes: string[] = []
-    for (const [i, l] of LINES.entries()) {
+    for (const [i, l] of lines.entries()) {
       const code = `S${String(i + 1).padStart(2, '0')}`
       const dirs = (['ida', 'vuelta'] as const).map((direction) => {
-        const [from, to] = direction === 'ida' ? [l.a, l.b] : [l.b, l.a]
-        const path = graph.shortestPath(node(from), node(to), arterial)
+        const [from, to] = direction === 'ida' ? [l.an, l.bn] : [l.bn, l.an]
+        const path = graph.shortestPath(direction === 'ida' ? l.a : l.b, direction === 'ida' ? l.b : l.a, arterial)
         if (!path) throw new Error(`sin camino ${from} → ${to} (línea ${code})`)
         return { direction, from, to, path }
       })
@@ -73,13 +116,13 @@ export async function seedFleet() {
         const { rows: [r] } = await client.query(
           `INSERT INTO routes (union_id, code, name, direction, mode, color, headway_min, geom, simulated)
            VALUES ($1, $2, $3, $4, 'minibus', $5, 10, ST_SetSRID(ST_GeomFromGeoJSON($6), 4326), true) RETURNING id`,
-          [u.id, code, `Línea simulada ${code}: ${NAME[d.from]} → ${NAME[d.to]}`, d.direction, COLORS[i % COLORS.length], toGeoJSONLine(d.path.pts)],
+          [u.id, code, `Línea simulada ${code}: ${d.from} → ${d.to}`, d.direction, COLORS[i % COLORS.length], toGeoJSONLine(d.path.pts, proj.unproject)],
         )
         ids[d.direction] = r.id
       }
       codes.push(code)
-      // Las unidades de refuerzo toman el sentido que llega antes al Obelisco desde su terminal (si hay dos parecidos, se alternan).
-      const toOb = dirs.map((d) => { const p = new Path(d.path.pts), at = p.locate(OBELISCO); return { d: d.direction, at: dist(p.at(at).p, OBELISCO) < 40 ? at : Infinity } })
+      // Las unidades de refuerzo toman el sentido que llega antes al hotspot desde su terminal (si hay dos parecidos, se alternan).
+      const toOb = dirs.map((d) => { const p = new Path(d.path.pts), at = p.locate(hot); return { d: d.direction, at: dist(p.at(at).p, hot) < 40 ? at : Infinity } })
       const best = Math.min(...toOb.map((x) => x.at))
       const crossing = toOb.filter((x) => x.at <= best * 1.35).map((x) => x.d)
       const total = l.regular + l.reserve
@@ -102,11 +145,11 @@ export async function seedFleet() {
         )
       }
     }
-    await addStops(client, landmarks, codes)
-    await addStopFences(client)
+    await addStops(client, zone, landmarks, codes)
+    await addStopFences(client, zone)
     await client.query('COMMIT')
     const c = (await pool.query(`SELECT count(*)::int n, count(*) FILTER (WHERE reserve)::int r FROM vehicles WHERE route_id IN (SELECT id FROM routes WHERE simulated)`)).rows[0]
-    console.log(`flota simulada: ${LINES.length} líneas, ${c.n - c.r} minibuses en servicio y ${c.r} de refuerzo`)
+    console.log(`flota simulada ${zone.id}: ${lines.length} líneas, ${c.n - c.r} minibuses en servicio y ${c.r} de refuerzo`)
   } catch (e) {
     await client.query('ROLLBACK')
     throw e

@@ -1,31 +1,25 @@
-// Descarga y prepara los datos reales del Centro de La Paz (una sola vez).
-//   node scripts/centro/fetch.ts            → usa la caché si existe
-//   node scripts/centro/fetch.ts --refresh  → vuelve a descargar
+// Descarga y prepara los datos reales de las zonas con vista detallada (shared/zones.ts).
+//   node scripts/zonas/fetch.ts centro alto   → zonas indicadas (usa la caché si existe)
+//   node scripts/zonas/fetch.ts --all         → todas las zonas
+//   node scripts/zonas/fetch.ts --refresh …   → vuelve a descargar
+//   node scripts/zonas/fetch.ts --discover …  → lista las rutas de transporte OSM de la zona para elegir las 3 líneas
 // Fuentes: OpenStreetMap vía Overpass (© OpenStreetMap contributors, ODbL) y
 // mosaicos de elevación Terrarium (AWS Terrain Tiles, derivados de SRTM y otros).
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { inflateSync } from 'node:zlib'
 import { join } from 'node:path'
+import { ZONES, type Zone } from '../../shared/zones.ts'
 
-const BBOX = { s: -16.512, w: -68.15, n: -16.488, e: -68.12 }
-const ORIGIN = { lat: -16.4958, lon: -68.1336 } // Plaza Murillo
 const MARGIN_M = 450 // el terreno se extiende un poco más allá del recuadro
-const OUT = 'public/centro'
-const CACHE = 'scripts/centro/.cache'
+// la zona en proceso: las funciones de abajo leen estos valores (se fijan en main para cada zona)
+let ZONE: Zone = ZONES[0]
+let BBOX = ZONE.bbox
+let ORIGIN = ZONE.origin
+let OUT = '', CACHE = '', bb = ''
 const UA = 'lapaz2050-digital-twin/0.2 (academic demo; Univalle La Paz)'
-const MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']
+const MIRRORS = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
 const REFRESH = process.argv.includes('--refresh')
-const bb = `${BBOX.s},${BBOX.w},${BBOX.n},${BBOX.e}`
-
-// Caso de estudio: 3 líneas reales (ver docs/caso-estudio-rutas.md)
-export const CASE_STUDY = [
-  { code: '212', ida: 9381528, vuelta: 9393419 },
-  { code: '204', ida: 19447024, vuelta: 19422164 },
-  { code: '453', ida: 17767401, vuelta: 17675641 },
-]
-
-mkdirSync(OUT, { recursive: true })
-mkdirSync(CACHE, { recursive: true })
+const DISCOVER = process.argv.includes('--discover')
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // ---- descargas con caché y reintentos -------------------------------------
@@ -96,7 +90,8 @@ function decodePng(buf: Buffer) {
 
 // ---- utilidades geográficas -------------------------------------------------
 
-const KX = 111320 * Math.cos((ORIGIN.lat * Math.PI) / 180), KZ = 110574
+let KX = 0
+const KZ = 110574
 const toLocal = (lon: number, lat: number) => [(lon - ORIGIN.lon) * KX, -(lat - ORIGIN.lat) * KZ]
 const toLonLat = (x: number, z: number) => [ORIGIN.lon + x / KX, ORIGIN.lat - z / KZ]
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6
@@ -180,16 +175,31 @@ async function streets() {
 
 // ---- 3. edificios, áreas y lugares ----------------------------------------------
 
+/** Distancia (m) al eje de edificios altos de la zona (ZONE.tall.axis). */
+function distToAxis(x: number, z: number) {
+  const p = ZONE.tall.axis.map(([lon, lat]) => toLocal(lon, lat))
+  let best = Infinity
+  for (let i = 1; i < p.length; i++) {
+    const [ax, az] = p[i - 1], [bx, bz] = p[i], dx = bx - ax, dz = bz - az
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)))
+    best = Math.min(best, Math.hypot(x - ax - t * dx, z - az - t * dz))
+  }
+  return best
+}
+
 function buildingHeight(t: Record<string, string>, c: LL): number {
   const h = parseFloat(t.height ?? t['building:height'] ?? '')
   if (h > 0) return h
   const lv = parseFloat(t['building:levels'] ?? '')
   if (lv > 0) return lv * 3 + 1
-  // ponytail: estimación sin dato — más alto junto al eje del Prado, bajo en las laderas
+  // ponytail: estimación sin dato — más alto junto al eje principal de la zona, bajo en las laderas
   const [x, z] = toLocal(c[0], c[1])
-  const prado = Math.abs(x * 0.85 + z * 0.53 - 420) // distancia aprox. al eje NO→SE del Prado
+  const axis = ZONE.id === 'centro'
+    ? Math.abs(x * 0.85 + z * 0.53 - 420) // distancia aprox. al eje NO→SE del Prado
+    : distToAxis(x, z)
   const seed = Math.abs(Math.sin(c[0] * 91731 + c[1] * 51287)) // estable por edificio
-  const base = prado < 220 ? 14 : prado < 600 ? 9 : 6
+  const [near, mid, far] = ZONE.tall.base
+  const base = axis < 220 ? near : axis < 600 ? mid : far
   return Math.round(base * (0.6 + seed * 0.9))
 }
 
@@ -296,7 +306,8 @@ function infill(streetsOut: any[], real: any[], areas: any[], sample: (lon: numb
   return out
 }
 
-const LANDMARKS: { label: string; re: RegExp }[] = [
+/** Hitos fijos del Centro (las otras zonas los eligen solas, ver landmarks()). */
+const CENTRO_LANDMARKS: { label: string; re: RegExp }[] = [
   { label: 'Plaza Murillo', re: /^Plaza (Pedro Domingo )?Murillo$/i },
   { label: 'Plaza San Francisco', re: /^Plaza (Mayor de )?San Francisco$/i },
   { label: 'Basílica de San Francisco', re: /^Basílica (Menor )?de San Francisco$/i },
@@ -321,15 +332,32 @@ async function schools() {
 }
 
 async function landmarks() {
-  const raw = await overpass('landmarks', `[out:json][timeout:180];nwr["name"](${bb})["name"~"Plaza|Basílica|Obelisco|Mercado|Palacio|Garita",i];out center tags;`)
-  const found = LANDMARKS.flatMap(({ label, re }) => {
-    const e = raw.elements.find((x: any) => re.test(x.tags.name))
-    if (!e) { console.log(`  ! no encontrado en OSM: ${label}`); return [] }
-    const p = e.center ?? e
-    return [{ label, osm: `${e.type}/${e.id}`, at: ll(p) }]
-  })
+  const raw = await overpass('landmarks', `[out:json][timeout:180];nwr["name"](${bb})["name"~"${ZONE.landmarks}",i];out center tags;`)
+  let found: { label: string; osm: string; at: LL }[]
+  if (ZONE.id === 'centro') {
+    found = CENTRO_LANDMARKS.flatMap(({ label, re }) => {
+      const e = raw.elements.find((x: any) => re.test(x.tags.name))
+      if (!e) { console.log(`  ! no encontrado en OSM: ${label}`); return [] }
+      return [{ label, osm: `${e.type}/${e.id}`, at: ll(e.center ?? e) }]
+    })
+  } else {
+    // ponytail: hitos automáticos — plazas y lugares con nombre, preferidos por tipo, separados ≥ 350 m, hasta 12
+    const rank = (t: Record<string, string>) => (t.place === 'square' || /^Plaza/i.test(t.name) ? 0 : t.amenity === 'marketplace' || /^Mercado/i.test(t.name) ? 1 : t.leisure === 'park' || t.leisure === 'stadium' ? 2 : 3)
+    const cands = raw.elements
+      .map((e: any) => ({ e, at: ll(e.center ?? e), r: rank(e.tags) }))
+      .filter((c: any) => inBox(c.at) && c.e.tags.name.length <= 40 && !/^(Calle|Avenida|Av\.|Pasaje)/i.test(c.e.tags.name))
+      .sort((a: any, b: any) => a.r - b.r || (a.e.type === 'way' ? -1 : 1))
+    found = []
+    for (const c of cands) {
+      if (found.length >= 12) break
+      if (found.some((f) => f.label === c.e.tags.name || meters(f.at, c.at) < 350)) continue
+      found.push({ label: c.e.tags.name, osm: `${c.e.type}/${c.e.id}`, at: c.at })
+    }
+  }
+  const h = ZONE.hotspot
+  if (!found.some((f) => meters(f.at, h.at) < 120)) found.push({ label: h.short, osm: '', at: h.at }) // el hotspot siempre se rotula
   writeFileSync(join(OUT, 'landmarks.json'), JSON.stringify(found))
-  console.log(`  ✓ landmarks.json ${found.length}/${LANDMARKS.length} lugares`)
+  console.log(`  ✓ landmarks.json ${found.length} lugares`)
 }
 
 // ---- 4. rutas del caso de estudio ---------------------------------------------
@@ -406,11 +434,12 @@ function clipToBox(line: LL[]): LL[] {
 }
 
 async function routes(streetEls: any[], segs: Seg[]) {
-  const ids = CASE_STUDY.flatMap((c) => [c.ida, c.vuelta])
-  const raw = await overpass('routes', `[out:json][timeout:180];relation(id:${ids.join(',')});out geom;`)
+  if (!ZONE.lines.length) { console.log('  ! la zona aún no tiene líneas elegidas (usar --discover)'); return }
+  const ids = ZONE.lines.flatMap((c) => [c.ida, c.vuelta])
+  const raw = await overpass(`routes-${ids.join('-')}`, `[out:json][timeout:180];relation(id:${ids.join(',')});out geom;`)
   const wayTags = new Map<number, Record<string, string>>(streetEls.map((w) => [w.id, w.tags]))
   const out: any[] = []
-  for (const c of CASE_STUDY) for (const dir of ['ida', 'vuelta'] as const) {
+  for (const c of ZONE.lines) for (const dir of ['ida', 'vuelta'] as const) {
     const rel = raw.elements.find((r: any) => r.id === c[dir])
     const { line, issues, wrongWay } = chain(rel, wayTags, segs)
     const clipped = clipToBox(line)
@@ -419,26 +448,80 @@ async function routes(streetEls: any[], segs: Seg[]) {
       osmRef: rel.tags.ref ?? '', fullKm: Math.round(lineLength(line) / 10) / 100, km: Math.round(lineLength(clipped) / 10) / 100,
       issues, wrongWay, pts: clipped,
     })
-    console.log(`  ✓ ${c.code} ${dir}: ${(lineLength(clipped) / 1000).toFixed(2)} km en el Centro de ${(lineLength(line) / 1000).toFixed(1)} km · ${issues.length ? issues.join('; ') : 'sin observaciones'}`)
+    console.log(`  ✓ ${c.code} ${dir}: ${(lineLength(clipped) / 1000).toFixed(2)} km en la zona de ${(lineLength(line) / 1000).toFixed(1)} km · ${issues.length ? issues.join('; ') : 'sin observaciones'}`)
   }
   writeFileSync(join(OUT, 'routes.json'), JSON.stringify(out))
 }
 
+// ---- 5. descubrimiento de líneas -------------------------------------------
+
+/**
+ * Lista las rutas OSM de transporte que pasan por la zona, agrupadas por número de línea, con lo que sirve
+ * para elegir las 3 del caso de estudio: modo, operador, si hay ida y vuelta, km dentro de la zona y saltos.
+ */
+async function discover() {
+  // 1) solo etiquetas (liviano); 2) geometría recortada al recuadro, por lotes: las rutas cruzan toda la ciudad
+  const tags = await overpass('discover-tags', `[out:json][timeout:120];rel(${bb})[type=route][route~"^(bus|minibus|share_taxi)$"];out tags;`)
+  const ids: number[] = tags.elements.map((r: any) => r.id)
+  const geom = new Map<number, any>()
+  for (let i = 0; i < ids.length; i += 12) {
+    const part = ids.slice(i, i + 12)
+    const raw = await overpass(`discover-geom-${part[0]}-${part.length}`, `[out:json][timeout:120];rel(id:${part.join(',')});out tags geom(${bb});`)
+    for (const r of raw.elements) geom.set(r.id, r)
+  }
+  const rows = tags.elements.map((tr: any) => {
+    const rel = geom.get(tr.id) ?? { members: [] }
+    const t = tr.tags
+    const ways = (rel.members ?? []).filter((m: any) => m.type === 'way' && m.geometry?.length)
+    const km = ways.reduce((a: number, m: any) => a + lineLength(m.geometry.filter((g: any) => g).map(ll)), 0) / 1000
+    const mode = /trufi/i.test(t.name ?? '') || t.route === 'share_taxi' ? 'trufi' : /puma|bus municipal|setram|lapazbus/i.test(`${t.name} ${t.operator} ${t.network}`) ? 'municipal' : /micro/i.test(t.name ?? '') ? 'micro' : 'minibus'
+    return { id: tr.id, ref: t.ref ?? '?', mode, name: t.name ?? '', from: t.from ?? '', to: t.to ?? '', op: t.operator ?? '', km, ptv2: t['public_transport:version'] === '2' }
+  })
+  const byRef = new Map<string, typeof rows>()
+  for (const r of rows) byRef.set(`${r.mode} ${r.ref}`, [...(byRef.get(`${r.mode} ${r.ref}`) ?? []), r])
+  const groups = [...byRef].map(([k, rs]) => ({ k, rs, km: Math.min(...rs.map((r: any) => r.km)) })).sort((a, b) => (b.rs.length >= 2 ? 1 : 0) - (a.rs.length >= 2 ? 1 : 0) || b.km - a.km)
+  console.log(`  rutas OSM en ${ZONE.name}: ${rows.length} relaciones, ${groups.length} líneas`)
+  for (const g of groups) {
+    console.log(`  ${g.k.padEnd(20)} ${`${g.rs.length} rel.`.padEnd(7)} ${g.km.toFixed(2)} km en zona (el sentido más corto)`)
+    for (const r of g.rs) console.log(`      ${r.id}  ${r.km.toFixed(2)} km  ${r.ptv2 ? 'PTv2' : '    '}  ${r.op ? `[${r.op}] ` : ''}${r.name}${r.from ? ` (${r.from} → ${r.to})` : ''}`)
+  }
+  writeFileSync(join(CACHE, 'discover-summary.json'), JSON.stringify(groups, null, 1))
+}
+
 // ---- main ---------------------------------------------------------------------
 
-console.log('LA PAZ 2050 · preparando datos del Centro')
-const sample = await elevation()
-const { els: streetEls, segs } = await streets()
-const { buildings: real, areas } = await buildingsAndAreas(sample)
-const streetsOut = JSON.parse(readFileSync(join(OUT, 'streets.json'), 'utf8'))
-const est = infill(streetsOut, real, areas, sample)
-writeFileSync(join(OUT, 'buildings.json'), JSON.stringify([...real, ...est]))
-console.log(`  ✓ buildings.json: ${real.length} reales de OSM + ${est.length} estimados (relleno de manzanas)`)
-await landmarks()
-await schools()
-await routes(streetEls, segs)
-writeFileSync(join(OUT, 'meta.json'), JSON.stringify({
-  bbox: BBOX, origin: ORIGIN, generated: new Date().toISOString().slice(0, 10),
-  attribution: '© OpenStreetMap contributors (ODbL) · Elevación: AWS Terrain Tiles (SRTM y otras fuentes)',
-}, null, 2))
-console.log('Listo →', OUT)
+async function build(zone: Zone) {
+  ZONE = zone; BBOX = zone.bbox; ORIGIN = zone.origin
+  KX = 111320 * Math.cos((ORIGIN.lat * Math.PI) / 180)
+  OUT = `public/zonas/${zone.id}`; CACHE = `scripts/zonas/.cache/${zone.id}`
+  bb = `${BBOX.s},${BBOX.w},${BBOX.n},${BBOX.e}`
+  mkdirSync(OUT, { recursive: true })
+  mkdirSync(CACHE, { recursive: true })
+  console.log(`LA PAZ 2050 · preparando datos de ${zone.name}`)
+  if (DISCOVER) return discover()
+  const sample = await elevation()
+  const { els: streetEls, segs } = await streets()
+  const { buildings: real, areas } = await buildingsAndAreas(sample)
+  const streetsOut = JSON.parse(readFileSync(join(OUT, 'streets.json'), 'utf8'))
+  const est = infill(streetsOut, real, areas, sample)
+  writeFileSync(join(OUT, 'buildings.json'), JSON.stringify([...real, ...est]))
+  console.log(`  ✓ buildings.json: ${real.length} reales de OSM + ${est.length} estimados (relleno de manzanas)`)
+  await landmarks()
+  await schools()
+  await routes(streetEls, segs)
+  const [hx, hz] = toLocal(zone.hotspot.at[0], zone.hotspot.at[1])
+  writeFileSync(join(OUT, 'meta.json'), JSON.stringify({
+    zone: zone.id, name: zone.name, bbox: BBOX, origin: ORIGIN, hotspot: { ...zone.hotspot, x: Math.round(hx), z: Math.round(hz) },
+    generated: new Date().toISOString().slice(0, 10),
+    attribution: '© OpenStreetMap contributors (ODbL) · Elevación: AWS Terrain Tiles (SRTM y otras fuentes)',
+  }, null, 2))
+  console.log('Listo →', OUT)
+}
+
+const ids = process.argv.includes('--all') ? ZONES.map((z) => z.id) : process.argv.slice(2).filter((a) => !a.startsWith('--'))
+if (!ids.length) { console.log(`uso: node scripts/zonas/fetch.ts [--refresh] [--discover] <${ZONES.map((z) => z.id).join('|')}…|--all>`); process.exit(1) }
+for (const id of ids) {
+  const z = ZONES.find((x) => x.id === id)
+  if (!z) throw new Error(`zona desconocida: ${id}`)
+  await build(z)
+}

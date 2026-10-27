@@ -1,4 +1,6 @@
 {
+  "zone": "centro",
+  "name": "Centro",
   "bbox": {
     "s": -16.512,
     "w": -68.15,
@@ -9,6 +11,16 @@
     "lat": -16.4958,
     "lon": -68.1336
   },
-  "generated": "2026-10-20",
+  "hotspot": {
+    "name": "El Prado",
+    "short": "Obelisco",
+    "at": [
+      -68.135081,
+      -16.498602
+    ],
+    "x": -158,
+    "z": 310
+  },
+  "generated": "2026-10-27",
   "attribution": "© OpenStreetMap contributors (ODbL) · Elevación: AWS Terrain Tiles (SRTM y otras fuentes)"
 }

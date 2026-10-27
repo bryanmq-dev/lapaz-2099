@@ -1,7 +1,11 @@
-// Comprobación de punta a punta contra PostGIS real: `pnpm --dir server check`
+// Comprobación de punta a punta contra PostGIS real: `pnpm --dir server check [zona]` (por defecto, el Centro)
 // Usa una base aparte (lapaz_check) para no interferir con la API en marcha.
 import pg from 'pg'
-import { unproject } from './geo.ts'
+import { zoneById } from '../../shared/zones.ts'
+
+const zone = zoneById(process.argv[2] ?? 'centro')
+if (!zone) throw new Error(`zona desconocida: ${process.argv[2]}`)
+const centro = zone.id === 'centro'
 
 const ADMIN = process.env.ADMIN_URL ?? 'postgres://lapaz:lapaz@localhost:5433/lapaz'
 process.env.DATABASE_URL = ADMIN.replace(/\/[^/]+$/, '/lapaz_check')
@@ -15,14 +19,18 @@ await admin.query('DROP DATABASE IF EXISTS lapaz_check WITH (FORCE)')
 await admin.query('CREATE DATABASE lapaz_check')
 await admin.end()
 
-const { migrate, seed, pool } = await import('./db.ts')
+const { openZone, seed } = await import('./db.ts')
 const { Simulator } = await import('./sim.ts')
 const { seedFleet } = await import('./fleet.ts')
-await migrate()
-await seed()
-await seedFleet()
-const sim = new Simulator()
+const db = await openZone(zone)
+const { pool } = db
+const { unproject } = db.proj
+await seed(db)
+await seedFleet(db)
+const sim = new Simulator(db)
 await sim.init()
+const [, second, third] = sim.realCodes
+console.log(`Zona: ${zone.name} · líneas reales ${sim.realCodes.join(', ')} · hotspot ${zone.hotspot.name}`)
 const peek = sim as any // estado interno que la prueba necesita leer
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -47,12 +55,14 @@ console.log('Línea base')
 for (let i = 0; i < 8; i++) { await sim.tick(); await sleep(1000) }
 ok((await pool.query(`SELECT count(*)::int n FROM alerts WHERE resolved_at IS NULL`)).rows[0].n === 0, 'sin alertas con la flota en sus rutas')
 const regular = sim.vehicles.filter((v) => !v.reserve).length
-ok(regular >= 200 && sim.vehicles.filter((v) => !v.reserve && v.kind === 'minibus').length >= 200, `hay ${regular} vehículos en servicio (≥ 200 minibuses)`)
+const minRegular = centro ? 200 : 100
+ok(regular >= minRegular && sim.vehicles.filter((v) => !v.reserve && v.kind === 'minibus').length >= minRegular, `hay ${regular} vehículos en servicio (≥ ${minRegular} minibuses)`)
 ok((await pool.query(`SELECT count(DISTINCT vehicle_id)::int n FROM vehicle_positions`)).rows[0].n === regular, 'las posiciones de toda la flota en servicio se registran en PostGIS')
-ok(sim.vehicles.filter((v) => v.reserve).length === 50 && sim.snapshot().vehicles.every((v) => !sim.vehicles.find((x) => x.id === v.id)!.reserve), '50 unidades de refuerzo esperan en base y no aparecen en el mapa')
-ok(sim.snapshot().metrics.congestedSegments === 0, 'el tráfico normal no congestiona el Centro')
+const reserve = sim.vehicles.filter((v) => v.reserve).length
+ok((centro ? reserve === 50 : reserve >= 30) && sim.snapshot().vehicles.every((v) => !sim.vehicles.find((x) => x.id === v.id)!.reserve), `${reserve} unidades de refuerzo esperan en base y no aparecen en el mapa`)
+ok(sim.snapshot().metrics.congestedSegments === 0, `el tráfico normal no congestiona ${zone.name}`)
 
-console.log('Hora punta: ~50 minibuses por El Prado, el Obelisco y la Av. Camacho')
+console.log(`Hora punta: el refuerzo converge en ${zone.hotspot.name}`)
 // La congestión no se impone: se mide. La simulación avanza sin esperar (las alertas de PostGIS que miran el reloj real
 // no se evalúan aquí) y al final se restablece.
 const fast = async (pred: () => boolean, maxTicks: number, msg: string) => {
@@ -62,15 +72,15 @@ const fast = async (pred: () => boolean, maxTicks: number, msg: string) => {
 msg = await sim.scenario('congestion')
 ok(msg.startsWith('Hora punta'), msg)
 ok((await sim.scenario('congestion')).startsWith('Ya hay'), 'una segunda hora punta no se duplica')
-await fast(() => sim.snapshot().metrics.reserveOut >= 45, 120, 'salen las unidades de refuerzo')
+await fast(() => sim.snapshot().metrics.reserveOut >= reserve * 0.9, 120, 'salen las unidades de refuerzo')
 await fast(() => peek.jams.size > 0, 600, 'la congestión aparece sola, sin imponerla')
-await fast(() => [...peek.jams.keys()].some((k: string) => /Prado|16 de Julio|Camacho|Santa Cruz/.test(k)), 600, 'la cola se forma en El Prado, la Mcal. Santa Cruz o la Av. Camacho')
+if (centro) await fast(() => [...peek.jams.keys()].some((k: string) => /Prado|16 de Julio|Camacho|Santa Cruz/.test(k)), 600, 'la cola se forma en El Prado, la Mcal. Santa Cruz o la Av. Camacho')
 ok((await open('congestion')) >= 1, 'alerta de congestión abierta en PostGIS')
-ok(sim.snapshot().alerts.some((a) => a.kind === 'congestion' && /Obelisco/.test(String(a.detail.via))), 'la alerta indica la zona del Obelisco')
+await fast(() => sim.snapshot().alerts.some((a) => a.kind === 'congestion' && String(a.detail.via).includes(`zona ${zone.hotspot.short}`)), 600, `la alerta indica la zona de ${zone.hotspot.short}`)
 ok(sim.snapshot().congestion.length > 0 && sim.snapshot().metrics.avgSpeedKmh > 0, 'los tramos congestionados se miden en la simulación')
 await fast(() => sim.routes.some((r) => r.detour), 120, 'se proponen desvíos')
 const box = (await pool.query(`SELECT ST_XMin(e) w, ST_XMax(e) e, ST_YMin(e) s, ST_YMax(e) n FROM (SELECT ST_Extent(geom) e FROM road_segments) x`)).rows[0]
-ok(sim.routes.filter((r) => r.detour).every((r) => r.detour!.pts.every((p) => { const [lon, lat] = unproject(p); return lon >= box.w && lon <= box.e && lat >= box.s && lat <= box.n })), 'los desvíos no salen del Centro')
+ok(sim.routes.filter((r) => r.detour).every((r) => r.detour!.pts.every((p) => { const [lon, lat] = unproject(p); return lon >= box.w && lon <= box.e && lat >= box.s && lat <= box.n })), `los desvíos no salen de ${zone.name}`)
 ok((await sim.scenario('despejar')).startsWith('Control'), 'el agente de tránsito entra en acción')
 await fast(() => peek.jams.size === 0 && !peek.peak, 900, 'la congestión se resuelve sola al pasar el refuerzo')
 ok(sim.routes.every((r) => !r.detour), 'se retiran los desvíos al normalizarse')
@@ -80,20 +90,20 @@ ok(sim.snapshot().metrics.congestedSegments === 0 && sim.snapshot().metrics.rese
 for (let i = 0; i < 8; i++) { await sim.tick(); await sleep(1000) }
 ok((await pool.query(`SELECT count(*)::int n FROM alerts WHERE resolved_at IS NULL`)).rows[0].n === 0, 'sin alertas tras el reset')
 
-console.log('Desvío no autorizado (Línea 204)')
+console.log(`Desvío no autorizado (Línea ${second})`)
 msg = await sim.scenario('desvio')
 for (let i = 0; i < 20 && !msg.startsWith('Desvío'); i++) { await sim.tick(); await sleep(1000); msg = await sim.scenario('desvio') }
 const p1 = plateIn(msg)
 await until(async () => (await open('fuera_de_ruta', p1)) === 1, 120, `alerta «fuera de ruta» para ${p1}`)
 await until(async () => (await open('fuera_de_ruta', p1)) === 0, 180, `la alerta se cierra cuando ${p1} vuelve a su ruta`)
 
-console.log('Avería (Línea 453)')
+console.log(`Avería (Línea ${third})`)
 msg = await sim.scenario('averia')
 const p2 = plateIn(msg)
 await until(async () => (await open('detenido', p2)) === 1, 30, `alerta «detenido» para ${p2}`)
 await until(async () => (await open('detenido', p2)) === 0, 40, `la alerta se cierra cuando ${p2} reanuda la marcha`)
 
-console.log('Geocerca Plaza Murillo (Línea 204)')
+console.log(`Geocerca de plaza peatonal (Línea ${second})`)
 msg = await sim.scenario('geocerca')
 for (let i = 0; i < 90 && !msg.startsWith('Ingreso'); i++) { await sim.tick(); await sleep(1000); msg = await sim.scenario('geocerca') }
 ok(msg.startsWith('Ingreso'), msg)
