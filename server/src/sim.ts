@@ -178,8 +178,13 @@ export class Simulator {
       this.step(dt)
       if (this.switched.length) {
         const sw = this.switched.splice(0)
-        await pool.query(`UPDATE vehicles v SET route_id = x.r, status = x.st FROM unnest($1::int[], $2::int[], $3::text[]) AS x(id, r, st) WHERE v.id = x.id`,
-          [sw.map((v) => v.id), sw.map((v) => v.route.id), sw.map((v) => v.status)])
+        try {
+          await pool.query(`UPDATE vehicles v SET route_id = x.r, status = x.st FROM unnest($1::int[], $2::int[], $3::text[]) AS x(id, r, st) WHERE v.id = x.id`,
+            [sw.map((v) => v.id), sw.map((v) => v.route.id), sw.map((v) => v.status)])
+        } catch (e) {
+          this.switched.unshift(...sw) // si la base falla, el cambio de sentido se reintenta: perderlo deja al vehículo «fuera de ruta» para siempre
+          throw e
+        }
       }
       const live = this.vehicles.filter((v) => v.phase === 'ruta')
       if (live.length) {

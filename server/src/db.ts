@@ -127,9 +127,27 @@ function nearestPlaza({ proj, data }: ZoneDb, areas: any[], landmarks: any[], ro
   // normal «entraría» a la geocerca
   const roads = data('roads.json').map((r: any) => r.pts.map(proj.project) as XZ[])
   const clear = (at: [number, number]) => { const p = proj.project(at); return roads.every((pts: XZ[]) => distToLine(p, pts) > PLAZA_R + 4) }
+  // un polígono de plaza puede incluir calzada (p. ej. Plaza Bicentenario en Sopocachi): ninguna vía puede pasar por dentro
+  const inside = ([x, z]: XZ, poly: XZ[]) => {
+    let c = false
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, zi] = poly[i], [xj, zj] = poly[j]
+      if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c
+    }
+    return c
+  }
+  const crossed = (pts: [number, number][]) => {
+    const poly = pts.map(proj.project)
+    return roads.some((r: XZ[]) => r.some((q, i) => {
+      if (!i) return inside(q, poly)
+      const [ax, az] = r[i - 1], n = Math.max(1, Math.ceil(Math.hypot(q[0] - ax, q[1] - az) / 5))
+      for (let k = 1; k <= n; k++) if (inside([ax + ((q[0] - ax) * k) / n, az + ((q[1] - az) * k) / n], poly)) return true
+      return false
+    }))
+  }
   const center = (pts: [number, number][]) => pts.reduce((s, p) => [s[0] + p[0] / pts.length, s[1] + p[1] / pts.length], [0, 0]) as [number, number]
   const cands = [
-    ...areas.filter((a: any) => a.n && /square|pedestrian/.test(a.k) && a.pts.length >= 3).map((a: any) => ({ n: a.n, pts: a.pts, d: away(center(a.pts)) })),
+    ...areas.filter((a: any) => a.n && /square|pedestrian/.test(a.k) && a.pts.length >= 3 && !crossed(a.pts)).map((a: any) => ({ n: a.n, pts: a.pts, d: away(center(a.pts)) })),
     ...landmarks.filter((l: any) => /^plaza/i.test(l.label) && clear(l.at)).map((l: any) => ({ n: l.label, at: l.at, d: away(l.at) })),
   ]
   return cands.sort((x, y) => x.d - y.d)[0] as { n: string; pts?: [number, number][]; at?: [number, number] } | undefined

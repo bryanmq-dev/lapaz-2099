@@ -2,6 +2,34 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado semántico.
 
+## [0.6.0] — 2026-10-27
+
+Tres zonas nuevas con vista detallada, minibús real, calidad seleccionable y realidad aumentada en más dispositivos.
+
+### Agregado
+- **Zonas El Alto (La Ceja), Sopocachi y Calacoto**, con el mismo proceso del Centro: terreno, calles, edificios, áreas, hitos y escuelas de OpenStreetMap y elevación SRTM, **3 líneas reales de minibús** por zona y simulación completa (hora punta, congestión emergente, desvíos o aviso de que no hay rodeo, desvío no autorizado, avería y geocerca). Documentadas en `docs/zonas/`.
+  - El Alto: 212, 731 y 267. Sopocachi: 296, 847 y 906. Calacoto: 922, 458 y 379 (en OSM tienen un solo sentido: la vuelta es un supuesto).
+- **Selector de zona** en la cabecera y acceso desde la vista Ciudad (doble clic o «Ver en detalle»).
+- **Minibús Toyota HiAce H200 de techo alto** (modelo propio con las medidas de la ficha técnica) y una station wagon para los trufis, en lugar de cajas.
+- **Selector de calidad de la ciudad** (Automática, Alta, Media, Baja) con lo que descarga cada nivel. La calidad baja descarga menos edificios. Barra de avance mientras se descarga la ciudad.
+- **Realidad mixta en teléfonos Android** (hit-test para colocar la maqueta sobre una superficie y panel HTML sobre la cámara).
+- **AR Quick Look en iPad y iPhone**, donde no existe WebXR en ningún navegador: la maqueta se exporta a USDZ y se coloca sobre la mesa real.
+- **`docs/fuentes.md`**: de dónde sale cada dato, modelo y supuesto, con licencias, para la defensa.
+- Script `scripts/zonas/fetch.ts` con `--discover` (rutas OSM de una zona) y `--try` (evaluar líneas candidatas).
+
+### Cambiado
+- La API sirve varias zonas: un **esquema de PostgreSQL por zona** (el Centro sigue en `public`) y cada zona **simula solo mientras alguien la mira**. Rutas `/api/zones/<zona>/…`; las de `/api/…` siguen siendo del Centro.
+- Los datos pasan de `public/centro/` a `public/zonas/<zona>/`.
+- **Rendimiento en dispositivos modestos:** la vista de zona se descarga solo al abrirla, los edificios se construyen en un Web Worker y la calidad baja sola si caen los FPS.
+- **Ventanas luminosas** en modo oscuro (cálidas y frías, con halo).
+
+### Corregido
+- Al cambiar de tema sin recargar, los edificios seguían con el shader del otro tema.
+- El iPad se trataba como un escritorio (se presenta como Mac): ahora se reconoce por ser táctil.
+
+### Fuera de esta versión
+- Miraflores y Villa Fátima (Overpass estuvo saturado; se pueden agregar con el mismo proceso).
+
 ## [0.5.0] — 2026-10-22
 
 Maqueta interactiva del Centro para gafas VR / realidad mixta (Meta Quest 3).

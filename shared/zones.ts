@@ -59,7 +59,11 @@ export const ZONES: Zone[] = [
     hotspot: { name: 'Plaza Abaroa', short: 'Plaza Abaroa', at: [-68.1268, -16.5104] },
     tall: { axis: [[-68.1335, -16.5045], [-68.1268, -16.5104], [-68.1195, -16.5165]], base: [13, 8, 5] }, // Av. 6 de Agosto
     landmarks: 'Plaza|Mercado|Parque|Iglesia|Mirador|Montículo|Embajada|Teatro',
-    lines: [],
+    lines: [ // minibuses con corredores distintos dentro de la zona (scripts/zonas/fetch.ts --discover y --try)
+      { code: '296', ida: 19980960, vuelta: 20619577 },
+      { code: '847', ida: 19982381, vuelta: 20108303 },
+      { code: '906', ida: 10261371, vuelta: 20083458 },
+    ],
   },
   {
     id: 'calacoto', name: 'Calacoto', district: 'zonasur',
@@ -68,7 +72,13 @@ export const ZONES: Zone[] = [
     hotspot: { name: 'Av. Ballivián y Calle 21', short: 'Calle 21', at: [-68.07805, -16.53897] }, // cruce en el grafo vial de OSM
     tall: { axis: [[-68.091467, -16.54119], [-68.086355, -16.539856], [-68.080979, -16.538747], [-68.07549, -16.539084]], base: [18, 9, 5] }, // Av. José Ballivián (traza de OSM)
     landmarks: 'Plaza|Mercado|Parque|Iglesia|Centro Comercial|Megacenter|Estadio|Club|Universidad',
-    lines: [],
+    // En OSM estas líneas tienen UNA sola relación (sin ida y vuelta separadas): se declara la misma en ambos sentidos y la
+    // vuelta se supone por el mismo corredor en sentido contrario (ver oneRelation en scripts/zonas/fetch.ts)
+    lines: [
+      { code: '922', ida: 10259073, vuelta: 10259073 },
+      { code: '458', ida: 9424671, vuelta: 9424671 },
+      { code: '379', ida: 10253969, vuelta: 10253969 },
+    ],
   },
 ]
 

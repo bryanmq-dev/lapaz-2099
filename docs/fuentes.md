@@ -55,6 +55,14 @@ Por zona se eligieron **3 líneas reales de minibús** (o de trufi si OSM no tie
 3. Corredores distintos entre sí, cuando es posible.
 4. Respaldo en fuentes públicas fuera de OSM para el operador, el horario o la frecuencia.
 
+Las candidatas se evalúan con `node scripts/zonas/fetch.ts <zona> --try=código:ida:vuelta,…`, que mide el tramo continuo dentro de la zona tal como queda en la simulación. Los km de `--discover` son solo orientativos: suman las vías de la relación que tocan el recuadro.
+
+**Líneas con una sola relación en OSM** (los minibuses de Calacoto): se declaran con la misma relación en ida y vuelta.
+- Si la ruta vuelve a su origen, es un circuito y se parte en dos.
+- Si no, **la vuelta se supone** por el mismo corredor en sentido contrario.
+
+Queda anotado en `routes.json` (`issues`) y en `lines.json` (`assumed`).
+
 Las fichas, con un enlace a cada relación OSM, están en el documento de cada zona (tabla de la sección 1). El Centro está documentado en [caso-estudio-rutas.md](caso-estudio-rutas.md).
 
 **Tarifas de La Paz** (minibús Bs 3,00 tramo corto · Bs 3,50 tramo largo, diurna): [Correo del Sur, 25-dic-2025](https://correodelsur.com/sociedad/20251225/en-la-paz-rigen-nuevas-tarifas-de-transporte-publico.html). Las líneas que nacen en El Alto pueden regirse por tarifas de ese municipio; en ese caso se marca en la ficha.
@@ -81,8 +89,9 @@ En la escena los vehículos se dibujan **2,2 veces más grandes** que su tamaño
 | Detección de congestión con histéresis | Un tramo se marca congestionado con nivel ≥ 0,55 y se libera con < 0,35 (media móvil de la velocidad medida); la alerta exige ≥ 150 m de tramos y ≤ 9 km/h | Parámetros propios (**supuestos**, calibrados en la simulación) |
 | Desvíos | Camino más corto (Dijkstra) por la red vial real, respetando sentidos únicos y evitando tramos congestionados | Grafo de `roads.json` |
 | Alertas espaciales | Fuera de ruta (> 40 m), detenido (> 45 s fuera de paradas), ingreso a geocerca | Consultas SQL de PostGIS (`ST_DWithin`, `ST_Intersects`, `::geography`) en `server/src/sim.ts` |
+| Geocerca restringida | Una plaza peatonal por zona: Plaza Murillo en el Centro; en las demás, la plaza con nombre más cercana a las líneas reales que ninguna vía transitable atraviesa (polígono de OSM, o un círculo de 12 m si la plaza es un hito-punto) | Regla propia (`nearestPlaza` en `server/src/db.ts`) |
 | Semáforo del hotspot | Dos fases (30 s / 26 s, con 3 s de despeje) | **Supuesto** de la simulación |
-| Hora punta | ~50 unidades de refuerzo que llegan al hotspot en una ventana de 90 s, cada 8 min | **Supuesto** de la simulación |
+| Hora punta | ~50 unidades de refuerzo que llegan al hotspot en una ventana de 90 s, cada 8 min. En las zonas nuevas, el refuerzo usa trayectos cortos (1,2–3,5 km) que cruzan el hotspot | **Supuesto** de la simulación |
 
 ## 6. Software y licencias
 

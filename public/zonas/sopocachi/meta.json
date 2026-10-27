@@ -6,7 +6,9 @@
     "areas": 110317,
     "buildings": 1225921,
     "buildings-extra": 1951022,
-    "landmarks": 1048
+    "landmarks": 1048,
+    "routes": 15254,
+    "lines": 2517
   },
   "name": "Sopocachi",
   "bbox": {

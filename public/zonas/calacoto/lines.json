@@ -1,0 +1,44 @@
+[
+  {
+    "code": "922",
+    "mode": "minibus",
+    "union": "Sin operador registrado en OSM",
+    "color": "#00D5FF",
+    "termini": "Av. Roma ↔ Los Pinos (sin extremos en OSM)",
+    "corridor": "Av. Roma → Av. José Ballivián → Calle 21 → Calle José María Aguirre Achá → Calle 3 → Entrada 3 de Los Pinos",
+    "fare": "Bs 3,00 tramo corto · Bs 3,50 tramo largo (supuesto: tarifa de minibús de La Paz)",
+    "schedule": "06:00–22:00 (supuesto)",
+    "headway": "8–12 min (supuesto)",
+    "headwayMin": 10,
+    "notes": "Recorre la Av. Ballivián y sube por la Calle 21 hacia Los Pinos: cruza el hotspot de la zona. OSM tiene un solo sentido; la vuelta es supuesta por el mismo corredor.",
+    "assumed": ["union", "termini", "fare", "schedule", "headway", "vuelta"]
+  },
+  {
+    "code": "458",
+    "mode": "minibus",
+    "union": "Sin operador registrado en OSM",
+    "color": "#FFB547",
+    "termini": "Calle 21 ↔ Av. Alfredo Ovando Candia (sin extremos en OSM)",
+    "corridor": "Calle 21 → Av. José Ballivián → Calle 12 (República de Portugal) → Av. Fuerza Naval → Av. Rafael Pabón → Calle 1 → Av. Alfredo Ovando Candia",
+    "fare": "Bs 3,00 tramo corto · Bs 3,50 tramo largo (supuesto: tarifa de minibús de La Paz)",
+    "schedule": "06:00–22:00 (supuesto)",
+    "headway": "10–15 min (supuesto)",
+    "headwayMin": 12,
+    "notes": "Une la Calle 21 con la Av. Fuerza Naval y la Ovando Candia. OSM marca tramos de la Ballivián en contramano y tiene un solo sentido; la vuelta es supuesta.",
+    "assumed": ["union", "termini", "fare", "schedule", "headway", "vuelta"]
+  },
+  {
+    "code": "379",
+    "mode": "minibus",
+    "union": "Sindicato Río Abajo – Palca",
+    "color": "#B39CFF",
+    "termini": "Calacoto ↔ Río Abajo / Palca (sin extremos en OSM)",
+    "corridor": "Av. Hugo Ernst → Puente Amor de Dios → Av. Hernán Siles → Calle 8 → Av. Costanera → Av. Los Sauces → Av. Arequipa → Av. José Ballivián → Av. Luis Adolfo Siles",
+    "fare": "Tarifa de minibús hacia Río Abajo por tramo (supuesto: sin fuente pública)",
+    "schedule": "05:30–21:00 (supuesto)",
+    "headway": "15–20 min (supuesto)",
+    "headwayMin": 15,
+    "notes": "Corredor del río (Costanera y Hernán Siles) hacia Río Abajo y Palca. Operador según OSM. Un salto de 2,4 km en OSM se reparó por la red vial; OSM tiene un solo sentido y la vuelta es supuesta.",
+    "assumed": ["termini", "fare", "schedule", "headway", "vuelta"]
+  }
+]

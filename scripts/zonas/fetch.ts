@@ -21,6 +21,8 @@ const UA = 'lapaz2050-digital-twin/0.2 (academic demo; Univalle La Paz)'
 const MIRRORS = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
 const REFRESH = process.argv.includes('--refresh')
 const DISCOVER = process.argv.includes('--discover')
+// --try=código:ida:vuelta,…  evalúa líneas candidatas como quedarían en la simulación (sin tocar public/)
+const TRY = process.argv.find((a) => a.startsWith('--try='))?.slice(6).split(',').map((x) => { const [code, ida, vuelta] = x.split(':'); return { code, ida: Number(ida), vuelta: Number(vuelta) } })
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // ---- descargas con caché y reintentos -------------------------------------
@@ -435,6 +437,22 @@ function clipToBox(line: LL[]): LL[] {
   return lineLength(cur) > lineLength(best) ? cur : best
 }
 
+/**
+ * Línea con una sola relación en OSM (sin ida y vuelta separadas). Si la ruta vuelve a su origen es un circuito: se parte en
+ * el punto más lejano del inicio (ida = primera mitad, vuelta = segunda). Si no, la vuelta se supone por el mismo corredor
+ * en sentido contrario, y se anota.
+ */
+function oneRelation(line: LL[], dir: 'ida' | 'vuelta', issues: string[]) {
+  if (meters(line[0], line[line.length - 1]) < 300) {
+    let far = 0
+    line.forEach((p, i) => { if (meters(line[0], p) > meters(line[0], line[far])) far = i })
+    return { line: dir === 'ida' ? line.slice(0, far + 1) : line.slice(far), issues: [...issues, 'circuito en una sola relación de OSM: se parte en el punto más lejano del inicio'] }
+  }
+  return dir === 'ida'
+    ? { line, issues }
+    : { line: [...line].reverse(), issues: ['vuelta SUPUESTA: OSM solo tiene un sentido; se usa el mismo corredor en sentido contrario', ...issues] }
+}
+
 async function routes(streetEls: any[], segs: Seg[]) {
   if (!ZONE.lines.length) { console.log('  ! la zona aún no tiene líneas elegidas (usar --discover)'); return }
   const ids = ZONE.lines.flatMap((c) => [c.ida, c.vuelta])
@@ -453,7 +471,8 @@ async function routes(streetEls: any[], segs: Seg[]) {
   const out: any[] = []
   for (const c of ZONE.lines) for (const dir of ['ida', 'vuelta'] as const) {
     const rel = raw.elements.find((r: any) => r.id === c[dir])
-    const { line, issues, wrongWay } = chain(rel, wayTags, segs)
+    let { line, issues, wrongWay } = chain(rel, wayTags, segs)
+    if (c.ida === c.vuelta) ({ line, issues } = oneRelation(line, dir, issues)) // OSM solo tiene una relación para la línea
     const clipped = clipToBox(line)
     out.push({
       code: c.code, direction: dir, osm: rel.id, name: rel.tags.name, operator: rel.tags.operator ?? '', from: rel.tags.from ?? '', to: rel.tags.to ?? '',
@@ -516,6 +535,12 @@ async function build(zone: Zone) {
   mkdirSync(CACHE, { recursive: true })
   console.log(`LA PAZ 2050 · preparando datos de ${zone.name}`)
   if (DISCOVER) return discover()
+  if (TRY) {
+    ZONE = { ...zone, lines: TRY }
+    const { els, segs } = await streets()
+    OUT = CACHE // routes.json de prueba en la caché
+    return routes(els, segs)
+  }
   const sample = await elevation()
   const { els: streetEls, segs } = await streets()
   const { buildings: real, areas } = await buildingsAndAreas(sample)
