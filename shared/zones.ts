@@ -61,8 +61,8 @@ export const ZONES: Zone[] = [
     id: 'calacoto', name: 'Calacoto', district: 'zonasur',
     bbox: { s: -16.552, w: -68.096, n: -16.528, e: -68.066 },
     origin: { lat: -16.5405, lon: -68.0815 }, // Calle 21 de Calacoto
-    hotspot: { name: 'Av. Ballivián y Calle 21', short: 'Calle 21', at: [-68.0838, -16.5413] },
-    tall: { axis: [[-68.0915, -16.5345], [-68.0838, -16.5413], [-68.0745, -16.5470]], base: [18, 9, 5] }, // Av. Ballivián
+    hotspot: { name: 'Av. Ballivián y Calle 21', short: 'Calle 21', at: [-68.07805, -16.53897] }, // cruce en el grafo vial de OSM
+    tall: { axis: [[-68.091467, -16.54119], [-68.086355, -16.539856], [-68.080979, -16.538747], [-68.07549, -16.539084]], base: [18, 9, 5] }, // Av. José Ballivián (traza de OSM)
     landmarks: 'Plaza|Mercado|Parque|Iglesia|Centro Comercial|Megacenter|Estadio|Club|Universidad',
     lines: [],
   },

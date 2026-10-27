@@ -346,12 +346,13 @@ async function landmarks() {
     const rank = (t: Record<string, string>) => (t.place === 'square' || /^Plaza/i.test(t.name) ? 0 : t.amenity === 'marketplace' || /^Mercado/i.test(t.name) ? 1 : t.leisure === 'park' || t.leisure === 'stadium' ? 2 : 3)
     const cands = raw.elements
       .map((e: any) => ({ e, at: ll(e.center ?? e), r: rank(e.tags) }))
-      .filter((c: any) => inBox(c.at) && c.e.tags.name.length <= 40 && !/^(Calle|Avenida|Av\.|Pasaje)/i.test(c.e.tags.name))
+      .filter((c: any) => inBox(c.at) && c.e.tags.name.length <= 40 && !/^(Calle|Avenida|Av\.|Pasaje|Estación de Servicio|Surtidor|Gasolinera|Parqueo|Estacionamiento)/i.test(c.e.tags.name))
       .sort((a: any, b: any) => a.r - b.r || (a.e.type === 'way' ? -1 : 1))
     found = []
     for (const c of cands) {
       if (found.length >= 12) break
-      if (found.some((f) => f.label === c.e.tags.name || meters(f.at, c.at) < 350)) continue
+      const plain = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() // «Américas» = «Americas»
+      if (found.some((f) => plain(f.label) === plain(c.e.tags.name) || meters(f.at, c.at) < 350)) continue
       found.push({ label: c.e.tags.name, osm: `${c.e.type}/${c.e.id}`, at: c.at })
     }
   }
@@ -467,7 +468,8 @@ async function discover() {
   const geom = new Map<number, any>()
   for (let i = 0; i < ids.length; i += 12) {
     const part = ids.slice(i, i + 12)
-    const raw = await overpass(`discover-geom-${part[0]}-${part.length}`, `[out:json][timeout:120];rel(id:${part.join(',')});out tags geom(${bb});`)
+    // `out geom(...)` (no `out tags geom`): el modo tags no trae los miembros, y sin ellos no hay geometría
+    const raw = await overpass(`discover-members-${part[0]}-${part.length}`, `[out:json][timeout:120];rel(id:${part.join(',')});out geom(${bb});`)
     for (const r of raw.elements) geom.set(r.id, r)
   }
   const rows = tags.elements.map((tr: any) => {
@@ -475,7 +477,11 @@ async function discover() {
     const t = tr.tags
     const ways = (rel.members ?? []).filter((m: any) => m.type === 'way' && m.geometry?.length)
     const km = ways.reduce((a: number, m: any) => a + lineLength(m.geometry.filter((g: any) => g).map(ll)), 0) / 1000
-    const mode = /trufi/i.test(t.name ?? '') || t.route === 'share_taxi' ? 'trufi' : /puma|bus municipal|setram|lapazbus/i.test(`${t.name} ${t.operator} ${t.network}`) ? 'municipal' : /micro/i.test(t.name ?? '') ? 'micro' : 'minibus'
+    // el nombre manda: hay minibuses etiquetados como route=share_taxi
+    const name = t.name ?? ''
+    const mode = /puma|bus municipal|setram|lapazbus/i.test(`${name} ${t.operator} ${t.network}`) ? 'municipal'
+      : /mini ?bus/i.test(name) ? 'minibus' : /trufi/i.test(name) ? 'trufi' : /micro/i.test(name) ? 'micro'
+      : t.route === 'share_taxi' ? 'trufi' : 'minibus'
     return { id: tr.id, ref: t.ref ?? '?', mode, name: t.name ?? '', from: t.from ?? '', to: t.to ?? '', op: t.operator ?? '', km, ptv2: t['public_transport:version'] === '2' }
   })
   const byRef = new Map<string, typeof rows>()
