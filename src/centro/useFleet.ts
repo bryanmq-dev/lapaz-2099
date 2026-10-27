@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { ZoneId } from '../../shared/zones'
 import { project, type LL } from './data'
 
 export type VehicleState = 'normal' | 'congestion' | 'desvio' | 'detenido' | 'alerta'
@@ -57,14 +58,18 @@ export function vehiclePos(id: number) {
 
 export type FleetStatus = 'connecting' | 'live' | 'offline'
 
-/** Suscripción SSE a /api/stream; se cierra al desmontar. EventSource reintenta solo. */
-export function useFleet() {
+export const api = (zone: ZoneId) => `/api/zones/${zone}`
+
+/** Suscripción SSE al stream de la zona; se cierra al desmontar o al cambiar de zona. EventSource reintenta solo. */
+export function useFleet(zone: ZoneId) {
   const [snap, setSnap] = useState<Snapshot | null>(null)
   const [status, setStatus] = useState<FleetStatus>('connecting')
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    const es = new EventSource('/api/stream')
+    // otra zona: se olvida la flota anterior (sus coordenadas locales no sirven aquí). La vista se monta de nuevo por zona.
+    fleet.prev = new Map(); fleet.cur = new Map(); fleet.snap = null
+    const es = new EventSource(`${api(zone)}/stream`)
     es.onopen = () => setStatus('live')
     es.onmessage = (e) => {
       const s = JSON.parse(e.data) as Snapshot
@@ -73,9 +78,9 @@ export function useFleet() {
       setStatus('live')
     }
     es.onerror = () => setStatus(es.readyState === EventSource.CLOSED ? 'offline' : 'connecting')
-    const watchdog = setTimeout(() => { if (!fleet.snap) setStatus('offline') }, 6000)
+    const watchdog = setTimeout(() => { if (!fleet.snap) setStatus('offline') }, 15000) // la primera vez la API prepara la zona
     return () => { clearTimeout(watchdog); es.close() }
-  }, [attempt])
+  }, [attempt, zone])
 
   // EventSource no reintenta si el proxy responde 502 (API reiniciándose): reintento propio cada 5 s
   useEffect(() => {
@@ -87,8 +92,8 @@ export function useFleet() {
   return { snap, status, retry: () => { setStatus('connecting'); setAttempt((n) => n + 1) } }
 }
 
-export async function runScenario(id: string): Promise<string> {
-  const r = await fetch(`/api/scenarios/${id}`, { method: 'POST' })
+export async function runScenario(zone: ZoneId, id: string): Promise<string> {
+  const r = await fetch(`${api(zone)}/scenarios/${id}`, { method: 'POST' })
   const body = await r.json().catch(() => ({ message: `HTTP ${r.status}` }))
   return body.message
 }

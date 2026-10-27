@@ -100,7 +100,9 @@ export function buildingsGeometry(list: Building[], minElev: number, light = fal
   return g
 }
 
-export function buildingsMaterial(light = false) {
+/** `windows: false` (calidad baja): material Lambert sin el patrón de ventanas, mucho más barato por píxel. */
+export function buildingsMaterial(light = false, windows = true) {
+  if (!windows) return new THREE.MeshLambertMaterial({ vertexColors: true })
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 })
   m.onBeforeCompile = (s) => {
     s.vertexShader = s.vertexShader

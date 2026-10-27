@@ -5,6 +5,7 @@ import {
 import { DISTRICTS, districtById } from '../simulation/cityData'
 import { sim } from '../simulation/useSimulation'
 import { setView } from '../view'
+import { ZONES } from '../../shared/zones'
 import type { DistrictStatus, IncidentPhase, Level, SimView } from '../simulation/types'
 import { ControlPanel } from './ControlPanel'
 import { EventFeed } from './EventFeed'
@@ -54,6 +55,7 @@ function useFullscreen() {
 
 function ZoneDetail({ view }: { view: SimView }) {
   const sel = view.state.selectedId
+  const detail = ZONES.find((z) => z.district === sel) // zona con vista detallada para este distrito (Obrajes no tiene)
   const d = sel ? view.districts[DISTRICTS.findIndex((x) => x.id === sel)] : null
   const info = sel ? districtById(sel) : null
   const all = view.districts
@@ -78,9 +80,9 @@ function ZoneDetail({ view }: { view: SimView }) {
           ))}
         </ul>
       )}
-      {sel === 'centro' && (
-        <button className="cta cta-recover sm detail-cta" onClick={() => setView('centro')}>
-          <MapIcon size={16} />Ver el Centro en detalle (datos reales)
+      {detail && (
+        <button className="cta cta-recover sm detail-cta" onClick={() => setView(detail.id)}>
+          <MapIcon size={16} />Ver {detail.name} en detalle (datos reales)
         </button>
       )}
     </Section>
@@ -110,8 +112,8 @@ export function Dashboard({ view }: { view: SimView }) {
           </div>
         </div>
         <div className="top-right">
-          <button className="icon-btn wide" title="Vista detallada del Centro con datos reales" onClick={() => setView('centro')}>
-            <MapIcon size={15} />Centro en detalle
+          <button className="icon-btn wide" title="Vistas detalladas por zona, con datos reales" onClick={() => setView('centro')}>
+            <MapIcon size={15} />Zonas en detalle
           </button>
           <span className="demo"><i />DEMO · SIMULACIÓN</span>
           <div className="clock"><small>HORA SIM.</small><b>{view.clock}</b></div>

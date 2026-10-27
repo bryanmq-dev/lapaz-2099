@@ -35,8 +35,8 @@ function Button({ x, y, w, label, color, active = true, disabled, onClick }: {
 }
 
 /** Panel flotante a la izquierda de la maqueta: lo esencial del HUD del Centro, con el rayo del control como puntero. */
-export function VrPanel({ snap, lines, hidden, onToggle, onRun, busy, message, onHome, detail, live, onRelease }: {
-  snap: Snapshot | null; lines: LineInfo[]; hidden: Set<string>; onToggle: (code: string) => void
+export function VrPanel({ hotspot, zoneName, snap, lines, hidden, onToggle, onRun, busy, message, onHome, detail, live, onRelease }: {
+  hotspot: string; zoneName: string; snap: Snapshot | null; lines: LineInfo[]; hidden: Set<string>; onToggle: (code: string) => void
   onRun: (id: string) => void; busy: boolean; message: string; onHome: () => void
   detail: VehicleDetail | null; live: FleetVehicle | null; onRelease: () => void
 }) {
@@ -54,7 +54,7 @@ export function VrPanel({ snap, lines, hidden, onToggle, onRun, busy, message, o
         <planeGeometry args={[0.56, 0.78]} />
         <meshBasicMaterial color="#07111F" toneMapped={false} transparent opacity={0.9} />
       </mesh>
-      <Label y={0.325} size={0.022} color={PALETTE.cyan}>CENTRO LA PAZ · MAQUETA</Label>
+      <Label y={0.325} size={0.022} color={PALETTE.cyan}>{`${zoneName.toUpperCase()} · MAQUETA`}</Label>
       <Label y={0.285} size={0.014} color="#9dc4f8">
         {m ? `${m.active} vehículos · ${m.avgSpeedKmh.toFixed(0)} km/h · ${m.alerts} alertas` : 'Sin conexión con la API'}
       </Label>
@@ -66,7 +66,7 @@ export function VrPanel({ snap, lines, hidden, onToggle, onRun, busy, message, o
             <meshBasicMaterial color={PALETTE.red} toneMapped={false} transparent opacity={0.3} />
           </mesh>
           <Label y={0.232} size={0.012} width={0.5}>
-            {`CONGESTIÓN · ${String(jam.detail.via ?? 'El Prado').toUpperCase()}\n${snap!.reroutes.length ? 'Desvío sugerido dentro del Centro' : `${jam.detail.vehiculos} vehículos a ${jam.detail.velocidad_kmh} km/h`}`}
+            {`CONGESTIÓN · ${String(jam.detail.via ?? hotspot).toUpperCase()}\n${snap!.reroutes.length ? `Desvío sugerido dentro de ${zoneName}` : `${jam.detail.vehiculos} vehículos a ${jam.detail.velocidad_kmh} km/h`}`}
           </Label>
         </>
       )}
@@ -76,7 +76,7 @@ export function VrPanel({ snap, lines, hidden, onToggle, onRun, busy, message, o
         const despejar = id === 'congestion' && jammed
         return (
           <Button key={id} x={i % 2 ? 0.14 : -0.14} y={0.145 - 0.05 * Math.floor(i / 2)} w={0.26} disabled={off}
-            label={despejar ? 'Despejar El Prado' : label} color={despejar ? TONE.recover : TONE[tone]} onClick={() => onRun(despejar ? 'despejar' : id)} />
+            label={despejar ? `Despejar ${hotspot}` : id === 'congestion' ? `${label} en ${hotspot}` : label} color={despejar ? TONE.recover : TONE[tone]} onClick={() => onRun(despejar ? 'despejar' : id)} />
         )
       })}
       <Button x={-0.14} y={0.045} w={0.26} label="Vista general" color={TONE.plain} onClick={onHome} />

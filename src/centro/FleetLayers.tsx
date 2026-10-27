@@ -8,71 +8,83 @@ import { PALETTE, reducedMotion, ribbon } from '../city/shared'
 import { FILLER_BUS, getTheme, useTheme } from '../theme'
 import { project, type LL, type LineInfo } from './data'
 import { drape, type HeightFn } from './geometry'
-import { fleet, vehiclePos, type Snapshot } from './useFleet'
+import { fleet, vehiclePos, type FleetVehicle, type Snapshot } from './useFleet'
+import { minibusGeometry, trufiGeometry } from './minibus'
 import { VR } from './xr'
 
 const MAX = 400 // ponytail: ~330 vehículos con la hora punta; subir si la flota crece
+/** Exageración del tamaño de los vehículos para que se lean a escala de ciudad (el modelo está en metros reales). */
+export const VEHICLE_SCALE = 2.2
 // objetos auxiliares reutilizados en cada frame (sin asignaciones por frame)
 const o = new THREE.Object3D()
 const c = new THREE.Color()
 const eye = new THREE.Vector3()
 const RED = new THREE.Color(PALETTE.red), AMBER = new THREE.Color(PALETTE.amber), GREEN = new THREE.Color(PALETTE.green)
 const FILLER = { dark: new THREE.Color(FILLER_BUS.dark), light: new THREE.Color(FILLER_BUS.light) } // flota simulada: se distingue de las 3 líneas reales
+const HIDE = new THREE.Matrix4().makeScale(0, 0, 0)
+const list: FleetVehicle[] = [] // la flota del frame (se reutiliza: sin arrays nuevos por frame)
 
 export function Vehicles({ height, lines, hidden, selected, onSelect, inXR = false }: {
   height: HeightFn; lines: LineInfo[]; hidden: Set<string>; selected: number | null; onSelect: (id: number | null) => void; inXR?: boolean
 }) {
-  const bodies = useRef<THREE.InstancedMesh>(null)
+  const vans = useRef<THREE.InstancedMesh>(null)   // minibuses (HiAce)
+  const cars = useRef<THREE.InstancedMesh>(null)   // trufis
   const beacons = useRef<THREE.InstancedMesh>(null)
   const ring = useRef<THREE.Mesh>(null)
-  const ids = useRef<number[]>([])
+  // id del vehículo de cada instancia, por malla (para el clic)
+  const ids = useRef({ vans: [] as number[], cars: [] as number[], beacons: [] as number[] })
   const lineColor = useMemo(() => new Map(lines.map((l) => [l.code, new THREE.Color(l.color)])), [lines])
+  const geo = useMemo(() => ({ van: minibusGeometry(), car: trufiGeometry() }), [])
   const camera = useThree((s) => s.camera)
 
+  useEffect(() => () => { geo.van.dispose(); geo.car.dispose() }, [geo])
   useLayoutEffect(() => {
-    for (const m of [bodies.current!, beacons.current!]) {
+    for (const m of [vans.current!, cars.current!, beacons.current!]) {
       m.frustumCulled = false
-      for (let i = 0; i < MAX; i++) m.setColorAt(i, c.set('#fff'))
+      for (let i = 0; i < MAX; i++) { m.setColorAt(i, c.set('#fff')); m.setMatrixAt(i, HIDE) }
     }
   }, [])
 
   useFrame(() => {
     const t = performance.now() / 1000 * (reducedMotion ? 0.3 : 1)
-    const list = [...fleet.cur.values()].map((e) => e.v)
-    bodies.current!.worldToLocal(camera.getWorldPosition(eye)) // la cámara en coordenadas de la ciudad: en la maqueta (grupo escalado) distan distinto que en el mundo
-    ids.current = list.map((v) => v.id)
-    for (let i = 0; i < MAX; i++) {
-      const v = list[i]
-      const p = v && !hidden.has(v.code) ? vehiclePos(v.id) : null
-      if (!v || !p) {
-        o.scale.setScalar(0); o.updateMatrix()
-        bodies.current!.setMatrixAt(i, o.matrix); beacons.current!.setMatrixAt(i, o.matrix)
-        continue
-      }
+    list.length = 0
+    for (const e of fleet.cur.values()) list.push(e.v)
+    beacons.current!.worldToLocal(camera.getWorldPosition(eye)) // la cámara en coordenadas de la ciudad: en la maqueta (grupo escalado) distan distinto que en el mundo
+    const I = ids.current
+    let nv = 0, nc = 0, nb = 0
+    for (const v of list) {
+      const p = !hidden.has(v.code) ? vehiclePos(v.id) : null
+      if (!p) continue
       const y = height(p.x, p.z)
       const trufi = v.kind === 'trufi'
-      o.position.set(p.x, y + (trufi ? 1.1 : 1.6), p.z)
-      o.rotation.set(0, -p.h, 0) // rumbo desde el norte (−z), sentido horario
-      o.scale.set(trufi ? 2.2 : 2.6, trufi ? 1.9 : 2.7, trufi ? 5 : 7.5).multiplyScalar(1.6) // ponytail: exageración ×1.6 para que se lean a escala ciudad
+      o.position.set(p.x, y, p.z)
+      o.rotation.set(0, -p.h, 0) // rumbo desde el norte (−z), sentido horario; el modelo mira a −z
+      o.scale.setScalar(VEHICLE_SCALE)
       o.updateMatrix()
-      bodies.current!.setMatrixAt(i, o.matrix)
       const base = lineColor.get(v.code) ?? FILLER[getTheme()]
       if (v.state === 'alerta') c.copy(RED).multiplyScalar(0.55 + 0.45 * Math.sin(t * 9))
       else if (v.state === 'detenido') c.copy(AMBER)
       else if (v.state === 'desvio') c.copy(GREEN)
       else c.copy(base).multiplyScalar(v.state === 'congestion' ? 0.55 : 1)
-      bodies.current!.setColorAt(i, c)
+      const mesh = trufi ? cars.current! : vans.current!
+      const k = trufi ? nc++ : nv++
+      mesh.setMatrixAt(k, o.matrix); mesh.setColorAt(k, c)
+      ;(trufi ? I.cars : I.vans)[k] = v.id
       // marcador con tamaño ~constante en pantalla: legible tanto en la vista general como de cerca
       const small = v.sim && v.id !== selected && v.state !== 'alerta' && v.state !== 'detenido' // la flota simulada: marcador más discreto
+      o.position.y = y + 1.6
       const size = Math.max(small ? 2 : 3, eye.distanceTo(o.position) * (small ? 0.0042 : 0.0065)) * (v.id === selected ? 1.6 : v.state === 'alerta' ? 1.35 : 1) * (inXR ? VR.beacon : 1)
       o.position.y = y + 8 + size * 2.2
       o.rotation.set(0, t, 0)
       o.scale.setScalar(size)
       o.updateMatrix()
-      beacons.current!.setMatrixAt(i, o.matrix)
-      beacons.current!.setColorAt(i, c)
+      beacons.current!.setMatrixAt(nb, o.matrix); beacons.current!.setColorAt(nb, c)
+      I.beacons[nb++] = v.id
     }
-    for (const m of [bodies.current!, beacons.current!]) {
+    // las instancias que sobran se ocultan (solo las que estaban en uso el frame anterior)
+    for (const [m, n, prev] of [[vans.current!, nv, I.vans], [cars.current!, nc, I.cars], [beacons.current!, nb, I.beacons]] as const) {
+      for (let i = n; i < prev.length; i++) m.setMatrixAt(i, HIDE)
+      prev.length = n
       m.instanceMatrix.needsUpdate = true
       if (m.instanceColor) m.instanceColor.needsUpdate = true
     }
@@ -84,19 +96,21 @@ export function Vehicles({ height, lines, hidden, selected, onSelect, inXR = fal
     }
   })
 
-  const pick = (e: { stopPropagation: () => void; instanceId?: number }) => {
+  const pick = (which: 'vans' | 'cars' | 'beacons') => (e: { stopPropagation: () => void; instanceId?: number }) => {
     e.stopPropagation()
-    if (e.instanceId != null) onSelect(ids.current[e.instanceId] ?? null)
+    if (e.instanceId != null) onSelect(ids.current[which][e.instanceId] ?? null)
   }
+  const hover = { onPointerOver: () => (document.body.style.cursor = 'pointer'), onPointerOut: () => (document.body.style.cursor = '') }
 
   return (
     <group>
-      <instancedMesh ref={bodies} args={[undefined, undefined, MAX]} onClick={pick}
-        onPointerOver={() => (document.body.style.cursor = 'pointer')} onPointerOut={() => (document.body.style.cursor = '')}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshBasicMaterial toneMapped={false} />
+      <instancedMesh ref={vans} args={[geo.van, undefined, MAX]} onClick={pick('vans')} {...hover}>
+        <meshLambertMaterial vertexColors toneMapped={false} />
       </instancedMesh>
-      <instancedMesh ref={beacons} args={[undefined, undefined, MAX]} onClick={pick}>
+      <instancedMesh ref={cars} args={[geo.car, undefined, MAX]} onClick={pick('cars')} {...hover}>
+        <meshLambertMaterial vertexColors toneMapped={false} />
+      </instancedMesh>
+      <instancedMesh ref={beacons} args={[undefined, undefined, MAX]} onClick={pick('beacons')}>
         <octahedronGeometry args={[1, 0]} />
         <meshBasicMaterial toneMapped={false} />
       </instancedMesh>

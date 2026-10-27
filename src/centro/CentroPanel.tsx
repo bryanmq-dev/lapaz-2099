@@ -32,7 +32,7 @@ export function Kpis({ snap }: { snap: Snapshot | null }) {
   const m = snap?.metrics
   return (
     <div className="kpis">
-      <MetricCard icon={Bus} label="En el Centro" value={m?.active ?? 0} sub={m?.reserveOut ? `${m.reserveOut} de refuerzo en hora punta` : 'vehículos activos'} tone="cyan" />
+      <MetricCard icon={Bus} label="En la zona" value={m?.active ?? 0} sub={m?.reserveOut ? `${m.reserveOut} de refuerzo en hora punta` : 'vehículos activos'} tone="cyan" />
       <MetricCard icon={Gauge} label="Velocidad" value={m?.avgSpeedKmh ?? 0} decimals={1} unit="km/h" sub="media de la flota" tone={(m?.avgSpeedKmh ?? 20) < 10 ? 'amber' : 'green'} />
       <MetricCard icon={TriangleAlert} label="Alertas" value={m?.alerts ?? 0} sub={m?.alerts ? 'abiertas en PostGIS' : 'sin alertas'} tone={m?.alerts ? 'red' : 'green'} />
       <MetricCard icon={TrafficCone} label="Congestión" value={m?.congestedSegments ?? 0} sub="tramos saturados" tone={m?.congestedSegments ? 'amber' : 'green'} />
@@ -172,8 +172,8 @@ export function Events({ snap }: { snap: Snapshot | null }) {
 }
 
 
-export function ScenarioBar({ snap, busy, message, onRun, onHome }: {
-  snap: Snapshot | null; busy: boolean; message: string; onRun: (id: string) => void; onHome: () => void
+export function ScenarioBar({ hotspot, snap, busy, message, onRun, onHome }: {
+  hotspot: string; snap: Snapshot | null; busy: boolean; message: string; onRun: (id: string) => void; onHome: () => void
 }) {
   const jammed = (snap?.metrics.congestedSegments ?? 0) > 0
   return (
@@ -182,11 +182,11 @@ export function ScenarioBar({ snap, busy, message, onRun, onHome }: {
         {SCENARIOS.map(({ id, label, icon: Icon, tone }) =>
           id === 'congestion' && jammed ? (
             <button key="despejar" className="cta cta-recover sm" disabled={busy || !snap} onClick={() => onRun('despejar')}>
-              <ShieldCheck size={16} />Despejar El Prado
+              <ShieldCheck size={16} />Despejar {hotspot}
             </button>
           ) : (
             <button key={id} className={`cta sm cta-${tone}`} disabled={busy || !snap} onClick={() => onRun(id)}>
-              <Icon size={16} />{label}
+              <Icon size={16} />{id === 'congestion' ? `${label} en ${hotspot}` : label}
             </button>
           ))}
         <div className="icon-group">

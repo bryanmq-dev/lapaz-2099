@@ -6,7 +6,7 @@ export const STATE_LABEL: Record<FleetVehicle['state'], string> = {
 }
 
 export const SCENARIOS = [
-  { id: 'congestion', label: 'Hora punta en El Prado', icon: TrafficCone, tone: 'incident' },
+  { id: 'congestion', label: 'Hora punta', icon: TrafficCone, tone: 'incident' }, // la vista añade « en <hotspot de la zona>»
   { id: 'desvio', label: 'Desvío no autorizado', icon: Route, tone: 'warn' },
   { id: 'averia', label: 'Avería', icon: Wrench, tone: 'warn' },
   { id: 'geocerca', label: 'Ingreso a geocerca', icon: Ban, tone: 'warn' },

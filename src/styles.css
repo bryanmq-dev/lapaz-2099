@@ -365,6 +365,22 @@ ul, ol { list-style: none; margin: 0; padding: 0; }
 
 /* ---------- modo claro / paneles ---------- */
 .tools { display: flex; gap: 8px; }
+.tools { position: relative; }
+.xr-off { opacity: 0.45; }
+.xr-hint {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: min(300px, calc(100vw - 32px));
+  padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+  font-size: 12px; line-height: 1.45; letter-spacing: normal; pointer-events: auto;
+}
+
+/* ---------- selector de zona (vista detallada) ---------- */
+.brand p.zone-pick { display: flex; align-items: center; gap: 6px; letter-spacing: 0.2em; }
+.zone-pick select {
+  pointer-events: auto; font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--text);
+  background: var(--panel-b); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; min-height: 26px;
+}
+.zone-pick select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+@media (max-width: 720px) { .zone-pick span { display: none; } .zone-pick select { min-height: 32px; font-size: 13px; } }
 :root[data-theme="light"] .panel { box-shadow: 0 1px 8px rgba(20, 40, 70, 0.1); }
 :root[data-theme="light"] .brand p, :root[data-theme="light"] .metric-top { color: var(--muted); }
 :root[data-theme="light"] .banner-main { color: var(--red); }
@@ -384,3 +400,19 @@ ul, ol { list-style: none; margin: 0; padding: 0; }
   .top-right { flex-wrap: wrap; justify-content: flex-end; gap: 6px 8px; }
   .hud:not(.hud-centro) .top-right .icon-btn:not(.wide) { width: 34px; height: 34px; }
 }
+
+/* ---------- realidad mixta en el teléfono (dom-overlay sobre la cámara) ---------- */
+.ar-overlay { position: fixed; inset: 0; pointer-events: none; font-family: inherit; color: var(--text); }
+.ar-overlay button, .ar-overlay .panel { pointer-events: auto; }
+.ar-exit { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; }
+.ar-place { position: absolute; left: 16px; right: 16px; bottom: max(24px, env(safe-area-inset-bottom)); padding: 14px; display: grid; gap: 10px; text-align: center; }
+.ar-place p { margin: 0; font-size: 14px; }
+.ar-place .cta { justify-content: center; min-height: 48px; }
+.ar-dock { position: absolute; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: grid; gap: 8px; }
+.ar-dock .controls { position: static; margin: 0; }
+.ar-veh { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 10px 12px; font-size: 13px; }
+.ar-veh span { color: var(--muted); grid-column: 1; }
+.ar-veh .icon-btn { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+.ar-lines { display: flex; gap: 8px; flex-wrap: wrap; }
+.ar-line { min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); border-left: 4px solid var(--lc, var(--line)); background: var(--panel); color: var(--text); font-weight: 600; }
+.ar-line[aria-pressed="false"] { opacity: 0.5; }
