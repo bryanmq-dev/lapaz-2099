@@ -148,9 +148,14 @@ async function main() {
   for (const z of ZONES.slice(1)) await zone(z.id).then(() => console.log(`zona lista: ${z.name}`), () => {})
 }
 
+/**
+ * Apagado: primero se detienen los simuladores (si no, siguen escribiendo en la base mientras otra API arranca) y después
+ * se cierra el servidor. app.close() espera a que terminen los streams SSE abiertos, que no terminan solos: se corta a los 2 s.
+ */
 const shutdown = async () => {
+  setTimeout(() => process.exit(0), 2000).unref() // primero: nada de lo que sigue puede dejar el proceso colgado
+  for (const z of zones.values()) void z.then((live) => live.sim.stop(), () => {}) // sin esperar a las zonas que aún se preparan
   await app.close()
-  for (const z of zones.values()) { const live = await z.catch(() => null); if (live) { live.sim.stop(); await live.db.pool.end() } }
   process.exit(0)
 }
 process.on('SIGINT', shutdown)
