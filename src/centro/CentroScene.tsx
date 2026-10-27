@@ -25,7 +25,7 @@ function Static({ data, height, inXR }: { data: CentroData; height: HeightFn; in
   const q = TIERS[useTier()]
   // en la maqueta los edificios bajos y sin nombre miden milímetros: se omiten para aligerar la escena
   const minH = inXR ? Math.max(VR.minBuildingH, q.minH) : q.minH
-  const { geo } = useZoneGeometry(data.meta.zone, light, minH)
+  const { geo } = useZoneGeometry(data.meta.zone, light, minH, q.extra, data.meta.sizes)
   const terrainMat = useMemo(() => contourMaterial({ density: 0.1, intensity: light ? 0.04 : 0.14, fadeFrom: 9000, fadeTo: 9999 }), [light])
   const buildingsMat = useMemo(() => buildingsMaterial(light), [light])
   if (!geo) return null
@@ -174,11 +174,11 @@ function Content({ data, snap, selected, onSelect, hidden, follow, homeSeq, focu
 
 export function CentroScene(props: SceneProps) {
   const tier = useTier()
-  // el antialias y la preferencia de GPU se fijan al crear el contexto: se toman del nivel inicial
-  const [gl] = useState(() => ({ antialias: TIERS[tier].antialias, powerPreference: tier === 'alta' ? 'high-performance' as const : 'default' as const }))
+  // el antialias se fija al crear el contexto: si cambia, el Canvas se crea de nuevo (key)
+  const gl = useMemo(() => ({ antialias: TIERS[tier].antialias, powerPreference: tier === 'alta' ? 'high-performance' as const : 'default' as const }), [tier])
   return (
     // la posición inicial la fija Content al montar (necesita la altura del terreno)
-    <Canvas dpr={[1, TIERS[tier].dpr]} gl={gl} camera={{ position: [1100, 1250, 1600], fov: 42, near: 2, far: 30000 }}
+    <Canvas key={String(gl.antialias)} dpr={[1, TIERS[tier].dpr]} gl={gl} camera={{ position: [1100, 1250, 1600], fov: 42, near: 2, far: 30000 }}
       onPointerMissed={(e) => e.type === 'click' && props.onSelect(null)}>
       {/* si los FPS caen de forma sostenida, baja el nivel de calidad (resolución, edificios, ventanas, rótulos) */}
       <PerformanceMonitor onDecline={lowerTier} flipflops={2} />

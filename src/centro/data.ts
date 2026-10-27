@@ -19,6 +19,7 @@ export interface Elevation { x0: number; z0: number; step: number; w: number; h:
 export interface Meta {
   zone: ZoneId; name: string; bbox: { s: number; w: number; n: number; e: number }; origin: { lat: number; lon: number }
   hotspot: { name: string; short: string; at: LL; x: number; z: number }; generated: string; attribution: string
+  sizes?: Record<string, number> // bytes de cada archivo, para mostrar cuánto descarga cada nivel de calidad
 }
 
 /** Datos livianos de la zona. Los pesados (edificios, calles, áreas) los descarga y construye el worker (geoWorker.ts). */

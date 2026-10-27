@@ -23,7 +23,7 @@ const solid = (color: string) => new THREE.MeshStandardMaterial({ color, roughne
 /** Construye la maqueta (~1 m de ancho), la exporta a USDZ y la abre en Quick Look. */
 export async function openQuickLook(data: CentroData) {
   const light = getTheme() === 'light'
-  const r = await request({ zone: data.meta.zone, light, minH: 0, ql: true })
+  const r = await request({ zone: data.meta.zone, light, minH: 0, extra: false, ql: true })
   if (r.error) throw new Error(r.error)
   const g = Object.fromEntries(Object.entries(r.geos).map(([k, p]) => [k, unpack(p)]))
   for (const geo of Object.values(g)) geo.deleteAttribute('aWin') // atributo propio del shader de ventanas: no va al USDZ

@@ -5,12 +5,13 @@
 //   node scripts/zonas/fetch.ts --discover …  → lista las rutas de transporte OSM de la zona para elegir las 3 líneas
 // Fuentes: OpenStreetMap vía Overpass (© OpenStreetMap contributors, ODbL) y
 // mosaicos de elevación Terrarium (AWS Terrain Tiles, derivados de SRTM y otros).
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { inflateSync } from 'node:zlib'
 import { join } from 'node:path'
 import { ZONES, type Zone } from '../../shared/zones.ts'
 
 const MARGIN_M = 450 // el terreno se extiende un poco más allá del recuadro
+const CORE_H = 11    // edificios principales: todos los reales de OSM, los que tienen nombre y los estimados de esta altura o más
 // la zona en proceso: las funciones de abajo leen estos valores (se fijan en main para cada zona)
 let ZONE: Zone = ZONES[0]
 let BBOX = ZONE.bbox
@@ -504,14 +505,20 @@ async function build(zone: Zone) {
   const { buildings: real, areas } = await buildingsAndAreas(sample)
   const streetsOut = JSON.parse(readFileSync(join(OUT, 'streets.json'), 'utf8'))
   const est = infill(streetsOut, real, areas, sample)
-  writeFileSync(join(OUT, 'buildings.json'), JSON.stringify([...real, ...est]))
+  // dos archivos: la calidad baja del front solo descarga los principales (~40 % del peso); el resto, en buildings-extra.json
+  const all = [...real, ...est], core = (b: any) => !b.e || b.n || b.h >= CORE_H
+  writeFileSync(join(OUT, 'buildings.json'), JSON.stringify(all.filter(core)))
+  writeFileSync(join(OUT, 'buildings-extra.json'), JSON.stringify(all.filter((b) => !core(b))))
   console.log(`  ✓ buildings.json: ${real.length} reales de OSM + ${est.length} estimados (relleno de manzanas)`)
   await landmarks()
   await schools()
   await routes(streetEls, segs)
   const [hx, hz] = toLocal(zone.hotspot.at[0], zone.hotspot.at[1])
+  // tamaño de cada archivo (bytes): el front estima cuánto descarga cada nivel de calidad
+  const sizes = Object.fromEntries(['elevation', 'streets', 'areas', 'buildings', 'buildings-extra', 'landmarks', 'routes', 'lines']
+    .filter((f) => existsSync(join(OUT, `${f}.json`))).map((f) => [f, statSync(join(OUT, `${f}.json`)).size]))
   writeFileSync(join(OUT, 'meta.json'), JSON.stringify({
-    zone: zone.id, name: zone.name, bbox: BBOX, origin: ORIGIN, hotspot: { ...zone.hotspot, x: Math.round(hx), z: Math.round(hz) },
+    zone: zone.id, sizes, name: zone.name, bbox: BBOX, origin: ORIGIN, hotspot: { ...zone.hotspot, x: Math.round(hx), z: Math.round(hz) },
     generated: new Date().toISOString().slice(0, 10),
     attribution: '© OpenStreetMap contributors (ODbL) · Elevación: AWS Terrain Tiles (SRTM y otras fuentes)',
   }, null, 2))

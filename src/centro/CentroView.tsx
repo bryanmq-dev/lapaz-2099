@@ -9,6 +9,7 @@ import { loadZone, setZone, type CentroData, type LL } from './data'
 import type { Geofence } from './FleetLayers'
 import { api, runScenario, useFleet, type FleetAlert } from './useFleet'
 import { VrEnter } from './VrEnter'
+import { DownloadBar, QualityPicker } from './QualityPicker'
 import { openQuickLook } from './quicklook'
 
 /** Ficha del vehículo seleccionado (chofer, ruta, recorrido reciente), refrescada cada 2 s. */
@@ -95,7 +96,7 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
             <div>
               <h1>{zone.name.toUpperCase()} <span>LA PAZ</span></h1>
               <p className="zone-pick">
-                <select value={id} onChange={(e) => setView(e.target.value as ZoneId)} aria-label="Cambiar de zona">
+                <select value={id} autoComplete="off" onChange={(e) => setView(e.target.value as ZoneId)} aria-label="Cambiar de zona">
                   {ZONES.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
                 </select>
                 <span>· SEGUIMIENTO DE TRANSPORTE PÚBLICO</span>
@@ -107,6 +108,7 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
             <span className="demo"><i />DEMO · SIMULACIÓN</span>
             <div className="clock"><small>HORA LA PAZ</small><b>{clock}</b></div>
             <div className="tools">
+              <QualityPicker sizes={data?.meta.sizes} />
               <VrEnter onQuickLook={data ? () => openQuickLook(data) : undefined} />
               <ThemeToggle />
               <button className="icon-btn panels-toggle" aria-pressed={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>
@@ -131,6 +133,8 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
             <ScenarioBar hotspot={zone.hotspot.name} snap={snap} busy={busy} message={message} onRun={run} onHome={() => { setSelected(null); setFocusAt(null); setHomeSeq((n) => n + 1) }} />
           </>
         )}
+
+        <DownloadBar />
 
         {jam && (
           <div className="banner banner-detected" role="alert" onClick={() => goTo(jam)}>

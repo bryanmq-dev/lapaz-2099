@@ -28,7 +28,7 @@ pnpm dev                         # web en :5173 (redirige /api a :3001)
 
 La primera vez la API carga los datos y la flota de cada zona (una tras otra, en segundo plano). Cada zona simula solo mientras alguien la mira. La vista ciudad funciona sin la API; las zonas muestran el mapa 3D sin la API, pero los vehículos y las alertas vienen del servidor.
 
-Calidad gráfica: se elige sola según el dispositivo y baja si caen los FPS. Para forzarla, `?calidad=alta|media|baja`.
+Calidad de la ciudad: selector en la cabecera de cada zona (Automática, Alta, Media, Baja), con lo que descarga cada nivel. «Automática» se elige según el dispositivo y baja si caen los FPS; la calidad baja descarga ~40 % de los edificios. También se puede forzar con `?calidad=alta|media|baja`.
 
 ## Comprobaciones
 
