@@ -31,28 +31,31 @@ El proyecto no dice en ningún sitio que los datos simulados sean reales: la int
                             │                              │
                             └──────────┬───────────────────┘
                                        ▼
-                     scripts/centro/fetch.ts  (una vez, con caché)
+          scripts/zonas/fetch.ts <zona>  (una vez por zona, con caché)
                                        │
                                        ▼
-                              public/centro/*.json
+                          public/zonas/<zona>/*.json
                      ┌─────────────────┴──────────────────┐
                      │ (se sirven tal cual)               │ (el servidor los carga al sembrar)
                      ▼                                    ▼
    Navegador: React 19 + three.js            API Fastify 5 + simulador (Node 24)
-   (vista Centro, escena 3D)                 server/src/*.ts   ── SQL ──►  PostGIS 17
-                     ▲                                    │
-                     └──────── SSE  /api/stream ◄─────────┘   (una «foto» por segundo)
+   (vista de zona, escena 3D)                server/src/*.ts   ── SQL ──►  PostGIS 17
+                     ▲                                    │              (un esquema por zona)
+                     └── SSE /api/zones/<zona>/stream ◄───┘   (una «foto» por segundo)
 ```
 
 - **Front**: Vite + React 19 (con React Compiler) + `@react-three/fiber` y `three`. Sin librería de estado: un objeto mutable (`fleet`) y `useSyncExternalStore` para la vista activa.
 - **API**: Fastify 5 + `pg`. Node ejecuta TypeScript directamente (sin paso de compilación); `tsc --noEmit` solo comprueba tipos.
 - **Base de datos**: PostGIS 17 (`postgis/postgis:17-3.5`). Geometrías en WGS84 (SRID 4326); las distancias en metros se calculan con `::geography`.
 - **Despliegue**: `docker-compose.yml` levanta `db`, `api` y `web` (nginx). nginx sirve el front y redirige `/api` a la API con el búfer desactivado (`proxy_buffering off`), imprescindible para SSE. En desarrollo, Vite redirige `/api` a `localhost:3001`.
-- **Arranque de la API** (`server/src/server.ts`): espera a PostGIS → `migrate()` (aplica `db/migrations/*.sql` pendientes) → `seed()` (datos del Centro y flota real, solo si la base está vacía) → `seedFleet()` (flota simulada, idempotente) → `sim.init()` → `sim.start()` (un tick por segundo) → escucha en `:3001`.
+- **Arranque de la API** (`server/src/server.ts`): espera a PostGIS → para el Centro: `openZone()` (crea el esquema y aplica `db/migrations/*.sql` pendientes) → `seed()` (datos y flota real, solo si el esquema está vacío) → `seedFleet()` (flota simulada, idempotente) → `sim.init()` → escucha en `:3001`. Después prepara las demás zonas en segundo plano, una tras otra.
+- **Zonas** (`shared/zones.ts`): cada zona define su recuadro, el origen de su proyección, su hotspot de hora punta y sus 3 líneas reales. La usan el script de datos, la API y el front.
+- **Un esquema de PostgreSQL por zona**: el Centro vive en `public` y las demás en `z_alto`, `z_sopocachi`, etc. Las tablas y las consultas son idénticas; la conexión de cada zona fija su `search_path`. Así las zonas no se mezclan sin tener que agregar una columna `zone` a cada tabla y a cada consulta.
+- **Simulación bajo demanda**: una zona solo hace ticks mientras alguien mira su stream (y 60 s más). Seis zonas caben en una laptop modesta.
 
 ## 3. Origen de los datos
 
-Todo sale de `scripts/centro/fetch.ts` (`node scripts/centro/fetch.ts`; `--refresh` descarga de nuevo). Lo que baja se guarda en `scripts/centro/.cache` (no se versiona) y lo que genera, en `public/centro/`.
+Todo sale de `scripts/zonas/fetch.ts` (`node scripts/zonas/fetch.ts <zona…|--all>`; `--refresh` descarga de nuevo; `--discover` lista las rutas de transporte de la zona para elegir las líneas). Lo que baja se guarda en `scripts/zonas/.cache/<zona>` (no se versiona) y lo que genera, en `public/zonas/<zona>/`. La tabla completa de fuentes y licencias está en [fuentes.md](fuentes.md). Lo que sigue describe el Centro; las demás zonas usan el mismo proceso con su propio recuadro y origen.
 
 **Recuadro y proyección.** El recuadro es S −16,512 · O −68,150 · N −16,488 · E −68,120. Todo se proyecta a **metros locales** con una equirectangular centrada en la Plaza Murillo: `x = (lon − lon₀)·111320·cos(lat₀)`, `z = −(lat − lat₀)·110574`. El mismo par de fórmulas está en el script, en el servidor (`geo.ts`) y en el front (`data.ts`), de modo que las posiciones coinciden sin conversiones. A esta escala (km) el error frente a una proyección exacta es despreciable.
 
@@ -251,6 +254,19 @@ SSE y no WebSocket porque el flujo es unidireccional (servidor → cliente) y `E
 - **Panel** (`VrPanel`): KPIs, anuncio de congestión, los 4 escenarios (más «Despejar»), interruptores de las 3 líneas, ficha del bus seleccionado y «Vista general» (devuelve la maqueta a su sitio). Es 3D, no DOM; los datos son los mismos que los del HUD.
 - **Acceso**: WebXR exige contexto seguro. Por USB: `adb reverse tcp:5173 tcp:5173` y abrir `http://localhost:5173#centro` en el Quest (el proxy `/api` de Vite cubre la API). Por Wi-Fi: `HTTPS=1 pnpm dev` (certificado autofirmado: Avanzado → continuar) o un túnel. La laptop debe tener la BD y la API levantadas.
 - **Rendimiento**: el Quest 3 renderiza dos ojos con GPU móvil. Perillas en `xr.ts`: `minBuildingH`, `foveation`, `frameBufferScaling`. Meta: 72 FPS con la hora punta.
+
+**XR en otros dispositivos.** Los botones de la cabecera (`VrEnter.tsx`) dependen de lo que ofrece el navegador:
+- **Android con ARCore** (`immersive-ar` en una sesión de pantalla, `interactionMode === 'screen-space'`): una retícula sigue la superficie que mira la cámara (`useXRHitTest`) y la maqueta (a la mitad de tamaño) se coloca con un botón. El panel es HTML sobre la cámara (`XRDomOverlay`, en `ArPhone.tsx`), porque el panel 3D sería ilegible en un teléfono.
+- **iPad y iPhone**: no hay WebXR en ningún navegador (todos usan WebKit). El botón exporta la maqueta a **USDZ** (`USDZExporter` de three, `quicklook.ts`) y la abre en **AR Quick Look**, que la apoya sobre una mesa real. Es una foto del momento: solo edificios reales de OSM, terreno a un tercio de resolución, avenidas, las 3 rutas y los vehículos donde están. El iPad se presenta como Mac; se reconoce por ser táctil.
+- **Tabletas y teléfonos sin ningún modo**: el botón aparece atenuado y, al tocarlo, explica por qué.
+
+**Rendimiento en dispositivos modestos.**
+- **Carga diferida**: la vista de zona (y con ella XR) se descarga solo al abrir una zona (`React.lazy`).
+- **Web Worker** (`geoWorker.ts`): edificios, calles y áreas se descargan, parsean y construyen fuera del hilo principal; las geometrías vuelven como buffers transferidos (sin copia). Antes, construir ~25.000 edificios congelaba la página en un teléfono.
+- **Niveles de calidad** (`quality.ts`): alta, media o baja según `deviceMemory`, núcleos y si es táctil. `PerformanceMonitor` (drei) baja el nivel si los FPS caen de forma sostenida. El nivel bajo usa resolución 1×, sin antialias, omite los edificios bajos sin nombre, cambia el shader de ventanas por un material Lambert y muestra menos rótulos. Se puede forzar con `?calidad=`.
+- **Vehículos**: una malla instanciada por tipo (minibús y trufi), sin arrays nuevos por frame.
+
+**Vehículos.** Minibús: modelo propio de la Toyota HiAce H200 de techo alto (`minibus.ts`, ~430 triángulos, medidas de la ficha técnica). Trufi: station wagon. La carrocería es blanca en el color de vértice y el color de instancia (línea o estado) la tiñe; vidrios, llantas y parachoques son oscuros y siguen oscuros. Se dibujan 2,2 veces más grandes que su tamaño real (`VEHICLE_SCALE`) para leerse a escala de ciudad.
 
 **Vista Ciudad.** Aparte, `src/simulation/simulationEngine.ts` es un motor determinista por pasos (siete distritos, KPIs derivados, incidente con fases de detección, respuesta y recuperación, y Dijkstra sobre un grafo de avenidas para la ruta alterna). Se comprueba con `pnpm check:sim`.
 
