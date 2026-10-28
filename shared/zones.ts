@@ -9,7 +9,7 @@ export interface ZoneLine {
 }
 
 export interface Zone {
-  id: ZoneId
+  id: ZoneId | 'metro'
   name: string
   /** distrito de la vista Ciudad que abre esta zona (src/simulation/cityData.ts) */
   district: string
@@ -25,7 +25,7 @@ export interface Zone {
   lines: ZoneLine[]
 }
 
-export const ZONES: Zone[] = [
+export const ZONES: (Zone & { id: ZoneId })[] = [
   {
     id: 'centro', name: 'Centro', district: 'centro',
     bbox: { s: -16.512, w: -68.15, n: -16.488, e: -68.12 },

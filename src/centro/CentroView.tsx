@@ -108,7 +108,8 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
             <span className="demo"><i />DEMO · SIMULACIÓN</span>
             <div className="clock"><small>HORA LA PAZ</small><b>{clock}</b></div>
             <div className="tools">
-              <QualityPicker sizes={data?.meta.sizes} />
+              <button className="icon-btn wide" onClick={() => setView('metropolitano')}>Mapa unificado</button>
+            <QualityPicker sizes={data?.meta.sizes} />
               <VrEnter onQuickLook={data ? () => openQuickLook(data) : undefined} />
               <ThemeToggle />
               <button className="icon-btn panels-toggle" aria-pressed={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>

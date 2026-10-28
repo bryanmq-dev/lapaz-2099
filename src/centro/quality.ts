@@ -5,11 +5,12 @@ import { useSyncExternalStore } from 'react'
  * Media, Baja); la elección se recuerda en el navegador y se puede forzar con ?calidad=alta|media|baja.
  * En Automática el nivel sale del hardware que informa el navegador, y PerformanceMonitor lo baja si caen los FPS.
  */
-export type Tier = 'alta' | 'media' | 'baja'
+export type Tier = 'alta' | 'media' | 'baja' | 'rutas'
 export type Choice = Tier | 'auto'
 
 // las ventanas de los edificios se dibujan en todos los niveles: sin ellas la ciudad se ve plana
 export const TIERS: Record<Tier, { dpr: number; antialias: boolean; extra: boolean; minH: number; labels: number }> = {
+  rutas: { dpr: 1, antialias: false, extra: false, minH: 0, labels: 12 },
   alta: { dpr: 1.75, antialias: true, extra: true, minH: 0, labels: 20 },
   media: { dpr: 1.25, antialias: true, extra: true, minH: 4, labels: 10 },
   // extra: false → no descarga buildings-extra.json (los edificios estimados de menos de 11 m, ~60 % del peso)
@@ -17,7 +18,7 @@ export const TIERS: Record<Tier, { dpr: number; antialias: boolean; extra: boole
 }
 
 /** Archivos que descarga cada nivel (los tamaños vienen en meta.json). */
-export const filesFor = (t: Tier) => ['elevation', 'streets', 'areas', 'buildings', ...(TIERS[t].extra ? ['buildings-extra'] : [])]
+export const filesFor = (t: Tier) => ['elevation', 'streets', 'areas', t === 'rutas' ? 'references' : 'buildings', ...(TIERS[t].extra ? ['buildings-extra'] : [])]
 
 function detect(): Tier {
   const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory // Chrome/Edge; Safari no lo informa
@@ -29,7 +30,7 @@ function detect(): Tier {
 }
 
 const KEY = 'lapaz-calidad'
-const isTier = (v: unknown): v is Tier => v === 'alta' || v === 'media' || v === 'baja'
+const isTier = (v: unknown): v is Tier => v === 'alta' || v === 'media' || v === 'baja' || v === 'rutas'
 function initialChoice(): Choice {
   const forced = new URLSearchParams(location.search).get('calidad')
   if (isTier(forced)) return forced
