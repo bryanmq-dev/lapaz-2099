@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html, OrbitControls, PerformanceMonitor } from '@react-three/drei'
 import * as THREE from 'three'
-import { metroProjection, type CableLine, type TransportMode } from '../../shared/metro'
+import { metroProjection, type CableLine } from '../../shared/metro'
 import { cableLoop } from '../../shared/cableMotion'
 import { makeHeight } from '../centro/data'
 import { buildingsMaterial, drape, streetGeometries, terrainGeometry } from '../centro/geometry'
@@ -12,10 +12,13 @@ import { SCENE, useTheme } from '../theme'
 import type { MetroData } from './data'
 import type { MetroLive } from './useMetroStream'
 import type { Packed } from '../centro/geoWorker'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { ribbon } from '../city/shared'
+import { cabinGeometry } from './cabinGeometry'
 
-type Props = { data: MetroData; mode: TransportMode; tier: Tier; selected: string | null; focus: number; live: MetroLive; onSelect: (id: string) => void; onProgress: (message: string) => void }
+export interface MetroFocus { station: string | null; seq: number }
+type Props = { data: MetroData; tier: Tier; selected: string | null; station: string | null; focus: MetroFocus; live: MetroLive; onSelectLine: (id: string) => void; onSelectStation: (id: string) => void; onProgress: (message: string) => void }
+type Cabin = ReturnType<typeof cabinGeometry>
+const STATE_COLOR = { detenido: '#ff5e63', mantenimiento: '#f4b454' } as const
+const WIRE_GAP = 8 // separación lateral de cada sentido respecto al eje de la línea (igual que en cableLoop)
 const dispose = (g: Record<string, THREE.BufferGeometry>) => Object.values(g).forEach((v) => v.dispose())
 function useSectorGeometry(props: Props, ids: string[], light: boolean) {
   const [entries, setEntries] = useState<Record<string, ZoneGeometry>>({})
@@ -79,16 +82,22 @@ function Sectors(props: Props & { light: boolean; controls: React.RefObject<any>
     <mesh geometry={g.buildings} material={material} />
   </group>)}</group>
 }
-function Cable({ line, props, height }: { line: CableLine; props: Props; height: (x: number, z: number) => number }) {
+function Cable({ line, props, height, cabin }: { line: CableLine; props: Props; height: (x: number, z: number) => number; cabin: Cabin }) {
   const loop = useMemo(() => cableLoop(line, props.data.cable.stations), [line, props.data.cable.stations])
-  const mesh = useRef<THREE.InstancedMesh>(null)
+  const shell = useRef<THREE.InstancedMesh>(null), trim = useRef<THREE.InstancedMesh>(null)
   const dummyRef = useRef(new THREE.Object3D())
-  const wire = useMemo(() => { const points = drape(line.pts, height, 25, 15, metroProjection.project); return new THREE.BufferGeometry().setFromPoints(points.flatMap((p, i) => i ? [points[i - 1], p] : [])) }, [line, height])
-  const cabin = useMemo(() => {
-    const body = new THREE.BoxGeometry(12, 8, 14).translate(0, -4, 0), roof = new THREE.BoxGeometry(14, 2, 16).translate(0, 7, 0), hanger = new THREE.BoxGeometry(2, 8, 2).translate(0, 12, 0)
-    const g = mergeGeometries([body, roof, hanger])!; body.dispose(); roof.dispose(); hanger.dispose(); return g
-  }, [])
-  useEffect(() => () => cabin.dispose(), [cabin])
+  // un cable por sentido, como en la red real: el desplazamiento es perpendicular al rumbo
+  const wire = useMemo(() => {
+    const points = drape(line.pts, height, 25, 15, metroProjection.project), segments: THREE.Vector3[] = []
+    for (const side of [1, -1]) {
+      const shifted = points.map((q, i) => {
+        const a = points[Math.max(0, i - 1)], b = points[Math.min(points.length - 1, i + 1)], len = Math.hypot(b.x - a.x, b.z - a.z) || 1
+        return new THREE.Vector3(q.x - (b.z - a.z) / len * WIRE_GAP * side, q.y, q.z + (b.x - a.x) / len * WIRE_GAP * side)
+      })
+      shifted.forEach((q, i) => { if (i) segments.push(shifted[i - 1], q) })
+    }
+    return new THREE.BufferGeometry().setFromPoints(segments)
+  }, [line, height])
   useEffect(() => () => wire.dispose(), [wire])
   useFrame(() => {
     const dummy = dummyRef.current
@@ -101,89 +110,70 @@ function Cable({ line, props, height }: { line: CableLine; props: Props; height:
     }
     for (let i = 0; i < loop.count; i++) {
       const { p, heading } = loop.at(phase + i / loop.count * loop.length)
-      dummy.position.set(p[0], height(...p) + 22, p[1]); dummy.rotation.y = -heading * Math.PI / 180
-      dummy.updateMatrix(); mesh.current?.setMatrixAt(i, dummy.matrix)
+      // la cabina avanza por +x; heading es de brújula (0 = norte, 90 = este)
+      dummy.position.set(p[0], height(...p) + 25, p[1]); dummy.rotation.y = Math.PI / 2 - heading * Math.PI / 180
+      dummy.updateMatrix(); shell.current?.setMatrixAt(i, dummy.matrix); trim.current?.setMatrixAt(i, dummy.matrix)
     }
-    if (mesh.current) mesh.current.instanceMatrix.needsUpdate = true
+    for (const m of [shell.current, trim.current]) if (m) m.instanceMatrix.needsUpdate = true
   })
-  const state = props.live.current.cable?.lines.find((s) => s.id === line.id)?.state
+  const state = props.live.current.cable?.lines.find((s) => s.id === line.id)?.state ?? 'normal'
+  const pick = (e: { stopPropagation: () => void }) => { e.stopPropagation(); props.onSelectLine(line.id) }
   return <group>
     <lineSegments geometry={wire}><lineBasicMaterial color={line.color} transparent opacity={props.selected && props.selected !== line.id ? 0.25 : 1} /></lineSegments>
-    <instancedMesh ref={mesh} args={[cabin, undefined, loop.count]} frustumCulled={false} onClick={(e) => { e.stopPropagation(); props.onSelect(line.id) }}>
-      <meshStandardMaterial color={state === 'detenido' ? '#ff5e63' : state === 'mantenimiento' ? '#f4b454' : line.color} emissive={line.color} emissiveIntensity={0.25} />
+    <instancedMesh ref={shell} args={[cabin.shell, undefined, loop.count]} frustumCulled={false} onClick={pick}>
+      <meshStandardMaterial color={state === 'normal' ? line.color : STATE_COLOR[state]} roughness={0.45} metalness={0.1} />
+    </instancedMesh>
+    <instancedMesh ref={trim} args={[cabin.trim, undefined, loop.count]} frustumCulled={false} onClick={pick}>
+      <meshStandardMaterial vertexColors roughness={0.35} metalness={0.2} />
     </instancedMesh>
   </group>
 }
-function Buses({ props, height }: { props: Props; height: (x: number, z: number) => number }) {
-  const mesh = useRef<THREE.InstancedMesh>(null), dummyRef = useRef(new THREE.Object3D())
-  useFrame(() => {
-    const dummy = dummyRef.current
-    if (!mesh.current) return
-    const state = props.live.current, vehicles = state.bus?.vehicles ?? [], previous = new Map(state.previousBus?.vehicles.map((v) => [v.id, v]) ?? [])
-    const alpha = Math.min(1, (performance.now() - state.received) / 1000)
-    mesh.current.count = Math.min(2000, vehicles.length)
-    for (let i = 0; i < mesh.current.count; i++) {
-      const v = vehicles[i], old = previous.get(v.id), p = metroProjection.project([v.lon, v.lat]), before = old ? metroProjection.project([old.lon, old.lat]) : p
-      const interpolate = Math.hypot(p[0] - before[0], p[1] - before[1]) < 80 && state.connected
-      const x = interpolate ? before[0] + (p[0] - before[0]) * alpha : p[0], z = interpolate ? before[1] + (p[1] - before[1]) * alpha : p[1]
-      dummy.position.set(x, height(x, z) + 7, z); dummy.rotation.y = -v.heading * Math.PI / 180; dummy.updateMatrix()
-      mesh.current.setMatrixAt(i, dummy.matrix)
-      mesh.current.setColorAt(i, new THREE.Color(v.state === 'normal' ? '#80cfe7' : '#f3a75c'))
-    }
-    mesh.current.instanceMatrix.needsUpdate = true; if (mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true
+// Vuelo suave hacia una estación (misma aproximación que con los vehículos: ~420 m, orientación de la vista general) o de vuelta a la ciudad.
+const HOME = { target: new THREE.Vector3(0, 700, 0), camera: new THREE.Vector3(13000, 24000, 18000) }
+function CameraRig({ focus, height, stations, controls }: { focus: MetroFocus; height: (x: number, z: number) => number; stations: Props['data']['cable']['stations']; controls: React.RefObject<any> }) {
+  const camera = useThree((s) => s.camera), goal = useRef<{ target: THREE.Vector3; camera: THREE.Vector3 } | null>(null), seen = useRef(0)
+  useEffect(() => {
+    if (focus.seq === seen.current) return
+    seen.current = focus.seq
+    const station = stations.find((s) => s.id === focus.station)
+    if (!station) { goal.current = HOME; return }
+    const [x, z] = metroProjection.project(station.at), target = new THREE.Vector3(x, height(x, z) + 25, z)
+    goal.current = { target, camera: target.clone().add(new THREE.Vector3(230, 260, 330)) }
+  }, [focus, stations, height])
+  useFrame((_, dt) => {
+    const g = goal.current, c = controls.current
+    if (!g || !c) return
+    const k = 1 - Math.exp(-dt * 3)
+    c.target.lerp(g.target, k); camera.position.lerp(g.camera, k)
+    if (camera.position.distanceTo(g.camera) < 4) goal.current = null
   })
-  const routes = useMemo(() => {
-    const selected = props.data.routes.find((r) => r.code === props.selected)
-    const list = selected ? [selected] : props.data.routes.slice(0, 24)
-    return list.map((r) => ribbon(drape(r.pts, height, 4, 30, metroProjection.project), selected ? 10 : 4, 0))
-  }, [props.data.routes, props.selected, height])
-  const congestionData = props.live.current.bus?.congestion
-  const congestion = useMemo(() => (congestionData ?? []).map((s) => ribbon(drape(s.coords, height, 6, 30, metroProjection.project), 15, 0)), [congestionData, height])
-  useEffect(() => () => routes.forEach((g) => g.dispose()), [routes])
-  useEffect(() => () => congestion.forEach((g) => g.dispose()), [congestion])
-  return <group>
-    {routes.map((g, i) => <mesh key={i} geometry={g}><meshBasicMaterial color="#34bcd5" transparent opacity={0.7} side={THREE.DoubleSide} /></mesh>)}
-    {congestion.map((g, i) => <mesh key={i} geometry={g}><meshBasicMaterial color="#ff804e" side={THREE.DoubleSide} /></mesh>)}
-    <instancedMesh ref={mesh} args={[undefined, undefined, 2000]} frustumCulled={false} onClick={(e) => { const v = props.live.current.bus?.vehicles[e.instanceId ?? -1]; if (v) props.onSelect(v.code) }}>
-      <boxGeometry args={[8, 10, 18]} /><meshStandardMaterial />
-    </instancedMesh>
-  </group>
+  useEffect(() => { controls.current?.target.copy(HOME.target); controls.current?.update() }, [controls])
+  return <OrbitControls ref={controls} makeDefault maxPolarAngle={Math.PI * 0.47} minDistance={60} maxDistance={60000} enableDamping onStart={() => { goal.current = null }} />
 }
 function World(props: Props) {
   const light = useTheme() === 'light', controls = useRef<any>(null)
-  const { camera } = useThree()
   const height = useMemo(() => makeHeight(props.data.elevation), [props.data.elevation])
   const terrain = useMemo(() => terrainGeometry(props.data.elevation, light), [props.data.elevation, light])
   const overview = useMemo(() => streetGeometries(props.data.overview, height, metroProjection.project, 90), [props.data.overview, height])
+  const cabin = useMemo(() => cabinGeometry(), [])
   useEffect(() => () => terrain.dispose(), [terrain])
   useEffect(() => () => dispose(overview), [overview])
-  useEffect(() => {
-    let pts = props.mode === 'telefericos' ? props.data.cable.lines.find((l) => l.id === props.selected)?.pts : props.data.routes.find((r) => r.code === props.selected)?.pts
-    if (!pts?.length) { camera.position.set(13000, 24000, 18000); controls.current?.target.set(0, 700, 0) }
-    else {
-      const points = pts.map(metroProjection.project), bounds = new THREE.Box3().setFromPoints(points.map(([x, z]) => new THREE.Vector3(x, height(x, z), z))), center = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3())
-      const distance = Math.max(1200, size.x, size.z) * 1.3
-      controls.current?.target.copy(center); camera.position.copy(center).add(new THREE.Vector3(distance * 0.25, distance, distance * 0.7))
-    }
-    controls.current?.update()
-  }, [props.focus, camera, props.mode, props.selected, props.data.routes, props.data.cable.lines, height])
+  useEffect(() => () => { cabin.shell.dispose(); cabin.trim.dispose() }, [cabin])
   return <>
     <color attach="background" args={[SCENE[light ? 'light' : 'dark'].bg]} />
     <ambientLight intensity={1.4} /><directionalLight position={[2000, 9000, 3000]} intensity={2} />
     <mesh geometry={terrain}><meshStandardMaterial vertexColors roughness={1} side={THREE.DoubleSide} /></mesh>
     <mesh geometry={overview.asphalt}><meshBasicMaterial color={light ? '#687e88' : '#59758b'} /></mesh>
     <Sectors {...props} light={light} controls={controls} />
-    {props.mode === 'telefericos' ? <>
-      {props.data.cable.lines.map((line) => <Cable key={line.id} line={line} props={props} height={height} />)}
-      {props.data.cable.stations.map((s) => { const [x, z] = metroProjection.project(s.at), chosen = props.selected && s.lines.includes(props.selected); return <group key={s.id} position={[x, height(x, z) + 25, z]}>
-        <mesh onClick={(e) => { e.stopPropagation(); props.onSelect(s.lines[0]) }}><cylinderGeometry args={[22, 22, 12, 12]} /><meshStandardMaterial color={chosen ? '#fff2bd' : '#b9d9e3'} /></mesh>
-        {chosen && <Html position={[0, 45, 0]} center style={{ pointerEvents: 'none' }}><span className="metro-station-label">{s.name}</span></Html>}
-      </group> })}
-    </> : <Buses props={props} height={height} />}
-    <OrbitControls ref={controls} makeDefault maxPolarAngle={Math.PI * 0.47} minDistance={100} maxDistance={60000} enableDamping />
+    {props.data.cable.lines.map((line) => <Cable key={line.id} line={line} props={props} height={height} cabin={cabin} />)}
+    {props.data.cable.stations.map((s) => { const [x, z] = metroProjection.project(s.at), chosen = props.station === s.id; return <group key={s.id} position={[x, height(x, z) + 25, z]}>
+      <mesh onClick={(e) => { e.stopPropagation(); props.onSelectStation(s.id) }}><cylinderGeometry args={[22, 22, 12, 12]} /><meshStandardMaterial color={chosen ? '#fff2bd' : '#b9d9e3'} /></mesh>
+      <Html position={[0, 45, 0]} center style={{ pointerEvents: 'none' }}><span className={`metro-station-label${chosen ? ' chosen' : ''}`}>{s.name.split(' / ')[0]}</span></Html>
+    </group> })}
+    <CameraRig focus={props.focus} height={height} stations={props.data.cable.stations} controls={controls} />
     <PerformanceMonitor onDecline={lowerTier} />
   </>
 }
 export function MetroScene(props: Props) {
-  return <Canvas camera={{ position: [13000, 24000, 18000], near: 5, far: 120000, fov: 45 }} dpr={TIERS[props.tier].dpr} gl={{ antialias: true }}><World {...props} /></Canvas>
+  return <Canvas camera={{ position: HOME.camera.toArray(), near: 5, far: 120000, fov: 45 }} dpr={TIERS[props.tier].dpr} gl={{ antialias: true }}><World {...props} /></Canvas>
 }

@@ -112,7 +112,7 @@ export function Dashboard({ view }: { view: SimView }) {
           </div>
         </div>
         <div className="top-right">
-          <button className="icon-btn wide" onClick={() => setView('metropolitano')}>Mapa unificado</button>
+          <button className="icon-btn wide" onClick={() => setView('metropolitano')}>Vista Mi Teleférico 2050</button>
           <button className="icon-btn wide" title="Vistas detalladas por zona, con datos reales" onClick={() => setView('centro')}>
             <MapIcon size={15} />Zonas en detalle
           </button>
