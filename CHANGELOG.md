@@ -2,6 +2,15 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado semántico.
 
+## [Sin publicar]
+
+### Agregado
+- **Mapa unificado · La Paz y El Alto** (`#metropolitano`): una sola escena continua con relieve, calles y edificios por sectores que se descargan según la cámara. Selector de transporte (Minibuses y tráfico / Teleféricos), registro de eventos y panel plegable.
+- **Teleféricos de Mi Teleférico** (las 10 líneas, 45 estaciones de OSM, transbordos tomados de las relaciones y no de la cercanía): cabinas en ambos sentidos con retorno en terminales, tres estados por línea (normal, mantenimiento, detenido), incidentes automáticos reproducibles por semilla y cambios manuales. Estado y movimiento **simulados**; alturas del cable aproximadas.
+- **Minibuses metropolitanos** en el esquema `metro` de PostGIS: 54 de 121 relaciones OSM tienen recorrido continuo sobre la red dirigida; el resto queda señalado en `bus-catalog.json`.
+- Nivel de calidad **Solo rutas** (también en las zonas): sin edificios completos, con un máximo de 10 de referencia por sector.
+- `scripts/metro/fetch.ts` (extracción versionada y atómica a `public/metro/<versión>/`), `scripts/metro/from-pbf.py` (rellena la caché desde Geofabrik sin Overpass) y `API_URL` para el proxy de Vite.
+
 ## [0.6.0] — 2026-10-27
 
 Tres zonas nuevas con vista detallada, minibús real, calidad seleccionable y realidad aumentada en más dispositivos.
