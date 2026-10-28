@@ -1,0 +1,36 @@
+{
+  "zone": "centro",
+  "sizes": {
+    "elevation": 321824,
+    "streets": 545180,
+    "areas": 155752,
+    "buildings": 1284072,
+    "buildings-extra": 2305698,
+    "landmarks": 1137,
+    "routes": 21974,
+    "lines": 2341
+  },
+  "name": "Centro",
+  "bbox": {
+    "s": -16.512,
+    "w": -68.15,
+    "n": -16.488,
+    "e": -68.12
+  },
+  "origin": {
+    "lat": -16.4958,
+    "lon": -68.1336
+  },
+  "hotspot": {
+    "name": "El Prado",
+    "short": "Obelisco",
+    "at": [
+      -68.135081,
+      -16.498602
+    ],
+    "x": -158,
+    "z": 310
+  },
+  "generated": "2026-10-27",
+  "attribution": "© OpenStreetMap contributors (ODbL) · Elevación: AWS Terrain Tiles (SRTM y otras fuentes)"
+}

@@ -1,4 +1,6 @@
-// Datos reales del Centro (generados por scripts/centro/fetch.ts) y proyección a metros locales.
+// Datos reales de una zona (generados por scripts/zonas/fetch.ts) y proyección a metros locales.
+import { ZONES, type Zone, type ZoneId } from '../../shared/zones'
+
 export type LL = [number, number]
 
 export interface Street { id: number; name: string; hw: string; oneway: number; lanes: number; pts: LL[] }
@@ -14,31 +16,47 @@ export interface LineInfo {
   fare: string; schedule: string; headway: string; headwayMin: number; notes: string; assumed: string[]
 }
 export interface Elevation { x0: number; z0: number; step: number; w: number; h: number; min: number; max: number; dm: number[] }
-export interface Meta { bbox: { s: number; w: number; n: number; e: number }; origin: { lat: number; lon: number }; generated: string; attribution: string }
-
-export interface CentroData {
-  meta: Meta; elevation: Elevation; streets: Street[]; buildings: Building[]; areas: Area[]
-  landmarks: Landmark[]; routes: RouteLine[]; lines: LineInfo[]
+export interface Meta {
+  zone: ZoneId; name: string; bbox: { s: number; w: number; n: number; e: number }; origin: { lat: number; lon: number }
+  hotspot: { name: string; short: string; at: LL; x: number; z: number }; generated: string; attribution: string
+  sizes?: Record<string, number> // bytes de cada archivo, para mostrar cuánto descarga cada nivel de calidad
 }
 
-// Misma proyección que el script de datos y el servidor (equirectangular local, origen Plaza Murillo)
-export const ORIGIN = { lat: -16.4958, lon: -68.1336 }
-const KX = 111320 * Math.cos((ORIGIN.lat * Math.PI) / 180), KZ = 110574
-export const project = (p: LL): [number, number] => [(p[0] - ORIGIN.lon) * KX, -(p[1] - ORIGIN.lat) * KZ]
-export const unproject = (x: number, z: number): LL => [ORIGIN.lon + x / KX, ORIGIN.lat - z / KZ]
+/** Datos livianos de la zona. Los pesados (edificios, calles, áreas) los descarga y construye el worker (geoWorker.ts). */
+export interface CentroData {
+  meta: Meta; elevation: Elevation; landmarks: Landmark[]; routes: RouteLine[]; lines: LineInfo[]
+}
 
-let cache: Promise<CentroData> | null = null
+// Misma proyección que el script de datos y el servidor (equirectangular local con origen en la zona).
+// ponytail: proyección global de la zona activa (solo se ve una a la vez); se fija con setZone() al entrar a la zona.
+let origin = ZONES[0].origin
+let KX = 0
+const KZ = 110574
+export let zone: Zone = ZONES[0]
+export function setZone(z: Zone) {
+  zone = z; origin = z.origin
+  KX = 111320 * Math.cos((origin.lat * Math.PI) / 180)
+}
+setZone(ZONES[0])
+export const project = (p: LL): [number, number] => [(p[0] - origin.lon) * KX, -(p[1] - origin.lat) * KZ]
+export const unproject = (x: number, z: number): LL => [origin.lon + x / KX, origin.lat - z / KZ]
 
-/** Carga perezosa: solo cuando se abre la vista del Centro. */
-export function loadCentro(): Promise<CentroData> {
-  const get = (f: string) => fetch(`${import.meta.env.BASE_URL}centro/${f}.json`).then((r) => {
+const cache = new Map<ZoneId, Promise<CentroData>>()
+
+/** Carga perezosa de los datos de una zona (public/zonas/<id>/), una vez por zona. */
+export function loadZone(id: ZoneId): Promise<CentroData> {
+  const get = (f: string) => fetch(`${import.meta.env.BASE_URL}zonas/${id}/${f}.json`).then((r) => {
     if (!r.ok) throw new Error(`${f}.json: HTTP ${r.status}`)
     return r.json()
   })
-  cache ??= Promise.all(['meta', 'elevation', 'streets', 'buildings', 'areas', 'landmarks', 'routes', 'lines'].map(get))
-    .then(([meta, elevation, streets, buildings, areas, landmarks, routes, lines]) => ({ meta, elevation, streets, buildings, areas, landmarks, routes, lines }))
-    .catch((e) => { cache = null; throw e })
-  return cache
+  let p = cache.get(id)
+  if (!p) {
+    p = Promise.all(['meta', 'elevation', 'landmarks', 'routes', 'lines'].map(get))
+      .then(([meta, elevation, landmarks, routes, lines]) => ({ meta, elevation, landmarks, routes, lines }))
+    p.catch(() => cache.delete(id))
+    cache.set(id, p)
+  }
+  return p
 }
 
 /** Altura del terreno en la escena (m sobre el punto más bajo del modelo), interpolación bilineal. */

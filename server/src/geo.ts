@@ -1,11 +1,17 @@
-// Proyección local (igual que el frontend y el script de datos) y utilidades de polilíneas.
+// Proyección local por zona (igual que el frontend y el script de datos) y utilidades de polilíneas.
 export type LL = [number, number]
 export type XZ = [number, number]
 
-export const ORIGIN = { lat: -16.4958, lon: -68.1336 } // Plaza Murillo
-const KX = 111320 * Math.cos((ORIGIN.lat * Math.PI) / 180), KZ = 110574
-export const project = (p: LL): XZ => [(p[0] - ORIGIN.lon) * KX, -(p[1] - ORIGIN.lat) * KZ]
-export const unproject = ([x, z]: XZ): LL => [Math.round((ORIGIN.lon + x / KX) * 1e7) / 1e7, Math.round((ORIGIN.lat - z / KZ) * 1e7) / 1e7]
+export interface Projector { project: (p: LL) => XZ; unproject: (p: XZ) => LL }
+
+/** Equirectangular local con origen en `origin` (x hacia el este, z hacia el sur, en metros). */
+export function projector(origin: { lat: number; lon: number }): Projector {
+  const KX = 111320 * Math.cos((origin.lat * Math.PI) / 180), KZ = 110574
+  return {
+    project: (p) => [(p[0] - origin.lon) * KX, -(p[1] - origin.lat) * KZ],
+    unproject: ([x, z]) => [Math.round((origin.lon + x / KX) * 1e7) / 1e7, Math.round((origin.lat - z / KZ) * 1e7) / 1e7],
+  }
+}
 export const dist = (a: XZ, b: XZ) => Math.hypot(a[0] - b[0], a[1] - b[1])
 
 /** Polilínea con longitudes acumuladas para muestrear por distancia recorrida. */
@@ -62,4 +68,4 @@ export function distToLine(p: XZ, pts: XZ[]): number {
   return best
 }
 
-export const toGeoJSONLine = (pts: XZ[]) => JSON.stringify({ type: 'LineString', coordinates: pts.map(unproject) })
+export const toGeoJSONLine = (pts: XZ[], unproject: Projector['unproject']) => JSON.stringify({ type: 'LineString', coordinates: pts.map(unproject) })

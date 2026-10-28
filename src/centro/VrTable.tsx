@@ -5,13 +5,13 @@ import { useTheme } from '../theme'
 import { VR } from './xr'
 
 /**
- * Mesa de la maqueta: escala la ciudad a ~1 m y la centra sobre `VR.at`.
+ * Mesa de la maqueta: escala la ciudad a ~1 m (`scale`) y la centra sobre `at` (en el teléfono, donde se colocó).
  * La base es el único asa: con un control se mueve y gira en Y, con los dos se escala.
  * (El asa no puede ser la ciudad entera: cada clic sobre un bus también arrastraría la maqueta.)
  * `resetSeq` devuelve la maqueta a su sitio sin volver a montar la escena.
  */
-export function VrTable({ children, center, size, resetSeq }: {
-  children: ReactNode; center: THREE.Vector3; size: [number, number]; resetSeq: number
+export function VrTable({ children, center, size, resetSeq, at = VR.at, scale = VR.scale }: {
+  children: ReactNode; center: THREE.Vector3; size: [number, number]; resetSeq: number; at?: [number, number, number]; scale?: number
 }) {
   const table = useRef<THREE.Group>(null)
   const light = useTheme() === 'light'
@@ -19,12 +19,12 @@ export function VrTable({ children, center, size, resetSeq }: {
   useEffect(() => {
     const t = table.current
     if (!t) return
-    t.position.set(...VR.at); t.quaternion.identity(); t.scale.set(1, 1, 1)
-  }, [resetSeq])
+    t.position.set(...at); t.quaternion.identity(); t.scale.set(1, 1, 1)
+  }, [resetSeq, at])
 
   return (
-    <group ref={table} position={VR.at}>
-      <group scale={VR.scale}>
+    <group ref={table} position={at}>
+      <group scale={scale}>
         <Handle targetRef={table} rotate={{ x: false, y: true, z: false }} scale={{ uniform: true }}>
           <mesh position={[0, -25, 0]}>
             <boxGeometry args={[size[0] + 120, 50, size[1] + 120]} />

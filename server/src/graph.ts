@@ -1,5 +1,5 @@
-// Grafo vial del Centro en memoria (cargado desde road_segments) y búsqueda de desvíos.
-import { dist, distToLine, project, type LL, type XZ } from './geo.ts'
+// Grafo vial de una zona en memoria (cargado desde road_segments) y búsqueda de desvíos.
+import { dist, distToLine, type LL, type Projector, type XZ } from './geo.ts'
 
 export interface Segment {
   id: number; name: string; highway: string; oneway: number; source: number; target: number
@@ -12,7 +12,7 @@ export class RoadGraph {
   private adj = new Map<number, Edge[]>()
   private nodes = new Map<number, XZ>()
 
-  constructor(rows: { id: number; name: string; highway: string; oneway: number; source: string; target: string; length_m: number; congestion: number; coords: LL[] }[]) {
+  constructor(project: Projector['project'], rows: { id: number; name: string; highway: string; oneway: number; source: string; target: string; length_m: number; congestion: number; coords: LL[] }[]) {
     for (const r of rows) {
       const s: Segment = {
         id: r.id, name: r.name, highway: r.highway, oneway: r.oneway, source: Number(r.source), target: Number(r.target),

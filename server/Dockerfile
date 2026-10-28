@@ -6,8 +6,9 @@ WORKDIR /app/server
 COPY server/package.json server/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 COPY server/src ./src
+COPY shared /app/shared
 COPY db /app/db
-COPY public/centro /app/public/centro
+COPY public/zonas /app/public/zonas
 ENV NODE_ENV=production PORT=3001
 EXPOSE 3001
 CMD ["node", "src/server.ts"]

@@ -1,0 +1,44 @@
+[
+  {
+    "code": "296",
+    "mode": "minibus",
+    "union": "Sindicato de transporte mixto «Simón Bolívar»",
+    "color": "#00D5FF",
+    "termini": "Eduardo Avaroa ↔ Circunvalación",
+    "corridor": "Ida: Héroes del Acre → Av. Ecuador → Av. Sánchez Lima → Fernando Guachalla → Av. 20 de Octubre → Puente Nudo Villazón → Av. del Poeta · Vuelta: Av. del Ejército → Federico Zuazo → Av. 16 de Julio → Plaza del Estudiante → Héroes del Acre",
+    "fare": "Bs 3,00 tramo corto · Bs 3,50 tramo largo (supuesto: tarifa de minibús de La Paz)",
+    "schedule": "06:00–22:00 (supuesto)",
+    "headway": "8–12 min (supuesto)",
+    "headwayMin": 10,
+    "notes": "Atraviesa el corazón de Sopocachi por la Sánchez Lima y la 20 de Octubre, junto a Plaza Abaroa (el hotspot de la zona).",
+    "assumed": ["fare", "schedule", "headway"]
+  },
+  {
+    "code": "847",
+    "mode": "minibus",
+    "union": "Sindicato de transporte mixto «Simón Bolívar»",
+    "color": "#FFB547",
+    "termini": "Mariano Colodro ↔ Alto Pampahasi",
+    "corridor": "Ida: Héroes del Acre → Av. Ecuador → Av. Sánchez Lima → Pedro Salazar → Puente de las Américas → Av. Busch · Vuelta: Av. Bautista Saavedra → Puente Gemelo de las Américas → Belisario Salinas → Av. Arce → Av. Villazón",
+    "fare": "Bs 3,00 tramo corto · Bs 3,50 tramo largo (supuesto: tarifa de minibús de La Paz)",
+    "schedule": "06:00–22:00 (supuesto)",
+    "headway": "10–15 min (supuesto)",
+    "headwayMin": 12,
+    "notes": "Une El Alto con Pampahasi cruzando Sopocachi y el Puente de las Américas hacia Miraflores.",
+    "assumed": ["fare", "schedule", "headway"]
+  },
+  {
+    "code": "906",
+    "mode": "minibus",
+    "union": "Sindicato de transporte mixto «Simón Bolívar»",
+    "color": "#B39CFF",
+    "termini": "Utapulpera ↔ Villa Litoral",
+    "corridor": "Ida: Otero de la Vega → Calle México → Plaza del Estudiante → Av. Villazón → Av. 6 de Agosto → Pedro Salazar → Puente de las Américas · Vuelta: Av. Bautista Saavedra → Puente Gemelo → Belisario Salinas → Av. Arce → Av. Villazón",
+    "fare": "Bs 3,00 tramo corto · Bs 3,50 tramo largo (supuesto: tarifa de minibús de La Paz)",
+    "schedule": "06:00–22:00 (supuesto)",
+    "headway": "10–15 min (supuesto)",
+    "headwayMin": 12,
+    "notes": "Entra a Sopocachi por la Av. 6 de Agosto y sale por la Av. Arce: el corredor del borde este de la zona.",
+    "assumed": ["fare", "schedule", "headway"]
+  }
+]

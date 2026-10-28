@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Billboard, Html, OrbitControls, Text } from '@react-three/drei'
+import { Billboard, Html, OrbitControls, PerformanceMonitor, Text } from '@react-three/drei'
 import { XR, useXR } from '@react-three/xr'
 import * as THREE from 'three'
 import { Sky } from '../city/CityScene'
@@ -11,46 +11,45 @@ import { makeHeight, project, type CentroData, type LL } from './data'
 import { CameraRig, Geofences, TrafficLayers, Trail, Vehicles, type Geofence } from './FleetLayers'
 import type { Snapshot } from './useFleet'
 import { VrPanel } from './VrPanel'
+import { ArPhonePanel, Reticle } from './ArPhone'
 import { VrTable } from './VrTable'
 import { VR, xrStore } from './xr'
 import type { VehicleDetail } from './CentroPanel'
-import { areasGeometry, buildingsGeometry, buildingsMaterial, drape, streetGeometries, terrainGeometry, type HeightFn } from './geometry'
+import { buildingsMaterial, drape, type HeightFn } from './geometry'
+import { TIERS, lowerTier, useTier } from './quality'
+import { useZoneGeometry } from './useZoneGeometry'
 
-const GL = { antialias: true, powerPreference: 'high-performance' } as const
 
 function Static({ data, height, inXR }: { data: CentroData; height: HeightFn; inXR: boolean }) {
-  const { elevation: el } = data
   const light = useTheme() === 'light'
-  const terrain = useMemo(() => terrainGeometry(el, light), [el, light])
-  const terrainMat = useMemo(() => contourMaterial({ density: 0.1, intensity: light ? 0.04 : 0.14, fadeFrom: 9000, fadeTo: 9999 }), [light])
+  const q = TIERS[useTier()]
   // en la maqueta los edificios bajos y sin nombre miden milímetros: se omiten para aligerar la escena
-  const list = useMemo(() => (inXR ? data.buildings.filter((b) => b.n || b.h >= VR.minBuildingH) : data.buildings), [data.buildings, inXR])
-  const buildings = useMemo(() => buildingsGeometry(list, el.min, light), [list, el.min, light])
+  const minH = inXR ? Math.max(VR.minBuildingH, q.minH) : q.minH
+  const { geo } = useZoneGeometry(data.meta.zone, light, minH, q.extra, data.meta.sizes)
+  const terrainMat = useMemo(() => contourMaterial({ density: 0.1, intensity: light ? 0.04 : 0.14, fadeFrom: 9000, fadeTo: 9999 }), [light])
   const buildingsMat = useMemo(() => buildingsMaterial(light), [light])
-  const streets = useMemo(() => streetGeometries(data.streets, height), [data.streets, height])
-  const parks = useMemo(() => areasGeometry(data.areas, height, (a) => /park|garden|grass|pitch|playground|recreation/.test(a.k)), [data.areas, height])
-  const plazas = useMemo(() => areasGeometry(data.areas, height, (a) => /square|pedestrian/.test(a.k)), [data.areas, height])
+  if (!geo) return null
 
   return (
     <group>
-      <mesh geometry={terrain} material={terrainMat} raycast={() => null} />
-      <mesh geometry={parks} raycast={() => null}>
+      <mesh geometry={geo.terrain} material={terrainMat} raycast={() => null} />
+      <mesh geometry={geo.parks} raycast={() => null}>
         <meshStandardMaterial color={light ? '#a6d3a0' : '#1d5a4c'} roughness={1} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-1} />
       </mesh>
-      <mesh geometry={plazas} raycast={() => null}>
+      <mesh geometry={geo.plazas} raycast={() => null}>
         <meshStandardMaterial color={light ? '#ddd8c8' : '#2c4462'} roughness={1} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-1} />
       </mesh>
-      <mesh geometry={streets.asphalt} raycast={() => null}>
+      <mesh geometry={geo.asphalt} raycast={() => null}>
         <meshStandardMaterial color={light ? '#6f7b8a' : '#0a1524'} roughness={0.9} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
       </mesh>
-      <mesh geometry={streets.minor} raycast={() => null}>
+      <mesh geometry={geo.minor} raycast={() => null}>
         <meshStandardMaterial color={light ? '#a3adb8' : '#1b2b40'} roughness={0.9} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
       </mesh>
-      <mesh geometry={streets.glow} raycast={() => null}>
+      <mesh geometry={geo.glow} raycast={() => null}>
         <meshBasicMaterial color={light ? '#fbf8ec' : PALETTE.cyan} transparent opacity={light ? 0.8 : 0.55} toneMapped={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
       </mesh>
-      <mesh geometry={buildings} material={buildingsMat} raycast={() => null} />
-      {data.landmarks.map((l) => {
+      <mesh geometry={geo.buildings} material={buildingsMat} raycast={() => null} />
+      {data.landmarks.slice(0, inXR ? 99 : q.labels).map((l) => {
         const [x, z] = project(l.at)
         const at: [number, number, number] = [x, height(x, z) + 55, z]
         return inXR ? ( // <Html> es DOM y no se ve dentro del visor
@@ -96,14 +95,20 @@ function Content({ data, snap, selected, onSelect, hidden, follow, homeSeq, focu
   const T = SCENE[theme], light = theme === 'light'
   const mode = useXR((s) => s.mode)
   const inXR = mode != null
+  // teléfono o tableta (Android): la sesión se maneja tocando la pantalla, no con controles en el espacio
+  const phone = useXR((s) => (s.session as (XRSession & { interactionMode?: string }) | undefined)?.interactionMode === 'screen-space')
+  const hit = useRef<THREE.Vector3 | null>(null)
+  const [canPlace, setCanPlace] = useState(false)
+  const [placed, setPlaced] = useState<[number, number, number] | null>(null)
   const get = useThree((s) => s.get)
   const [resetSeq, setResetSeq] = useState(0)
   const height = useMemo(() => makeHeight(data.elevation), [data.elevation])
   const home = useMemo(() => {
-    const [x, z] = project([-68.1365, -16.4995]) // centro del recuadro (Prado / Casco Viejo)
+    const { bbox } = data.meta
+    const [x, z] = project([(bbox.w + bbox.e) / 2, (bbox.s + bbox.n) / 2]) // centro del recuadro de la zona
     const t = new THREE.Vector3(x, height(x, z), z)
     return { target: t, camera: t.clone().add(new THREE.Vector3(1100, 1250, 1600)) }
-  }, [height])
+  }, [height, data.meta])
   // la maqueta se centra en el punto medio del modelo y la base se ajusta a su recuadro
   const table = useMemo(() => {
     const { x0, z0, step, w, h } = data.elevation
@@ -140,10 +145,18 @@ function Content({ data, snap, selected, onSelect, hidden, follow, homeSeq, focu
       <hemisphereLight args={[T.hemiSky, T.hemiGround, light ? 1.1 : 0.8]} />
       <directionalLight color={T.sun} intensity={light ? 1.8 : 1.3} position={[-900, 1400, 700]} />
       <directionalLight color={T.rim} intensity={light ? 0.3 : 0.3} position={[800, 400, -900]} />
-      {inXR ? (
+      {inXR && phone ? (
+        <>
+          {!placed && <Reticle onHit={(p) => { hit.current = p && p.clone(); if (!!p !== canPlace) setCanPlace(!!p) }} />}
+          {placed && <VrTable center={table.center} size={table.size} resetSeq={resetSeq} at={placed} scale={VR.scale * VR.phoneScale}>{world}</VrTable>}
+          <ArPhonePanel placed={!!placed} canPlace={canPlace} onPlace={() => hit.current && setPlaced(hit.current.toArray())} onReplace={() => { setPlaced(null); setCanPlace(false) }}
+            hotspot={data.meta.hotspot?.name ?? ''} snap={snap} busy={busy} message={message} onRun={onRun}
+            lines={data.lines} hidden={hidden} onToggle={onToggleLine} detail={detail} live={live} onRelease={() => onSelect(null)} />
+        </>
+      ) : inXR ? (
         <>
           <VrTable center={table.center} size={table.size} resetSeq={resetSeq}>{world}</VrTable>
-          <VrPanel snap={snap} lines={data.lines} hidden={hidden} onToggle={onToggleLine} onRun={onRun} busy={busy} message={message}
+          <VrPanel hotspot={data.meta.hotspot?.name ?? ''} zoneName={data.meta.name ?? ''} snap={snap} lines={data.lines} hidden={hidden} onToggle={onToggleLine} onRun={onRun} busy={busy} message={message}
             onHome={() => setResetSeq((n) => n + 1)} detail={detail} live={live} onRelease={() => onSelect(null)} />
         </>
       ) : (
@@ -160,10 +173,15 @@ function Content({ data, snap, selected, onSelect, hidden, follow, homeSeq, focu
 }
 
 export function CentroScene(props: SceneProps) {
+  const tier = useTier()
+  // el antialias se fija al crear el contexto: si cambia, el Canvas se crea de nuevo (key)
+  const gl = useMemo(() => ({ antialias: TIERS[tier].antialias, powerPreference: tier === 'alta' ? 'high-performance' as const : 'default' as const }), [tier])
   return (
     // la posición inicial la fija Content al montar (necesita la altura del terreno)
-    <Canvas dpr={[1, 1.75]} gl={GL} camera={{ position: [1100, 1250, 1600], fov: 42, near: 2, far: 30000 }}
+    <Canvas key={String(gl.antialias)} dpr={[1, TIERS[tier].dpr]} gl={gl} camera={{ position: [1100, 1250, 1600], fov: 42, near: 2, far: 30000 }}
       onPointerMissed={(e) => e.type === 'click' && props.onSelect(null)}>
+      {/* si los FPS caen de forma sostenida, baja el nivel de calidad (resolución, edificios, ventanas, rótulos) */}
+      <PerformanceMonitor onDecline={lowerTier} flipflops={2} />
       <XR store={xrStore}>
         <Content {...props} />
       </XR>

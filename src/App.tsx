@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
-import { CentroView } from './centro/CentroView'
+import { Suspense, lazy, useMemo } from 'react'
 import { CityScene } from './city/CityScene'
 import { Dashboard } from './components/Dashboard'
 import { useSimClock, useSimulation } from './simulation/useSimulation'
 import { useView } from './view'
 import './styles.css'
+
+// la vista detallada (three.js de las zonas, XR, worker) se descarga solo al abrir una zona
+const CentroView = lazy(() => import('./centro/CentroView').then((m) => ({ default: m.CentroView })))
 
 function CityView() {
   useSimClock()
@@ -20,5 +22,10 @@ function CityView() {
 }
 
 export default function App() {
-  return useView() === 'centro' ? <CentroView /> : <CityView />
+  const view = useView()
+  return view === 'city' ? <CityView /> : (
+    <Suspense fallback={<div className="loading">Cargando la vista detallada…</div>}>
+      <CentroView key={view} zone={view} />
+    </Suspense>
+  )
 }

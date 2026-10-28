@@ -1,0 +1,36 @@
+{
+  "zone": "calacoto",
+  "sizes": {
+    "elevation": 309377,
+    "streets": 417484,
+    "areas": 187216,
+    "buildings": 1211813,
+    "buildings-extra": 1600797,
+    "landmarks": 1084,
+    "routes": 32300,
+    "lines": 2500
+  },
+  "name": "Calacoto",
+  "bbox": {
+    "s": -16.552,
+    "w": -68.096,
+    "n": -16.528,
+    "e": -68.066
+  },
+  "origin": {
+    "lat": -16.5405,
+    "lon": -68.0815
+  },
+  "hotspot": {
+    "name": "Av. Ballivián y Calle 21",
+    "short": "Calle 21",
+    "at": [
+      -68.07805,
+      -16.53897
+    ],
+    "x": 368,
+    "z": -169
+  },
+  "generated": "2026-10-27",
+  "attribution": "© OpenStreetMap contributors (ODbL) · Elevación: AWS Terrain Tiles (SRTM y otras fuentes)"
+}

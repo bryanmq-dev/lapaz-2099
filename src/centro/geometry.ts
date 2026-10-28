@@ -102,6 +102,8 @@ export function buildingsGeometry(list: Building[], minElev: number, light = fal
 
 export function buildingsMaterial(light = false) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 })
+  // el texto de onBeforeCompile es el mismo en ambos temas: sin una clave propia, three reutilizaría el shader del otro tema
+  m.customProgramCacheKey = () => (light ? 'buildings-day' : 'buildings-night')
   m.onBeforeCompile = (s) => {
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec4 aWin; varying vec4 vWin; varying float vRoof;')
@@ -113,12 +115,21 @@ export function buildingsMaterial(light = false) {
         `#include <emissivemap_fragment>
         vec2 g = vec2(vWin.x / 3.4, vWin.y / 3.0);
         vec2 cell = floor(g); vec2 f = fract(g);
-        float win = step(0.22, f.x) * step(f.x, 0.78) * step(0.28, f.y) * step(f.y, 0.72);
+        // distancia normalizada al borde de la ventana: < 1 dentro, crece hacia afuera (para el halo)
+        float d = max(abs(f.x - 0.5) / 0.28, abs(f.y - 0.5) / 0.22);
+        float win = step(d, 1.0);
         float rnd = fract(sin(dot(cell + vWin.w * 97.1, vec2(12.9898, 78.233))) * 43758.5453);
-        float lit = step(0.46, rnd) * (1.0 - vRoof) * step(2.5, vWin.y) * step(vWin.y, vWin.z - 1.5);
+        float facade = (1.0 - vRoof) * step(2.5, vWin.y) * step(vWin.y, vWin.z - 1.5);
+        float lit = step(0.46, rnd) * facade;
         ${light
           ? 'diffuseColor.rgb *= 1.0 - 0.4 * win * lit; // de día: vidrios oscuros, sin luces'
-          : `totalEmissiveRadiance += win * lit * mix(vec3(1.0, 0.76, 0.45), vec3(0.55, 0.85, 1.0), step(0.8, rnd)) * (0.5 + 0.7 * rnd);
+          : `// de noche: ventanas encendidas que brillan (cálidas y algunas frías) con un halo suave sobre la fachada
+        vec3 tint = mix(vec3(1.0, 0.72, 0.38), vec3(0.5, 0.86, 1.0), step(0.82, rnd));
+        float halo = (1.0 - smoothstep(1.0, 1.7, d)) * (1.0 - win);
+        float flicker = 0.75 + 0.5 * fract(rnd * 7.31); // intensidad propia de cada ventana
+        diffuseColor.rgb *= 1.0 - 0.55 * win * facade; // vidrio más oscuro que el muro
+        totalEmissiveRadiance += (win * 1.9 + halo * 0.45) * lit * tint * flicker;
+        totalEmissiveRadiance += win * (1.0 - lit) * facade * vec3(0.03, 0.08, 0.14); // apagadas: reflejo azul tenue
         totalEmissiveRadiance += vRoof * vec3(0.0, 0.18, 0.26);`}`,
       )
   }
@@ -137,7 +148,8 @@ export function streetGeometries(streets: Street[], height: HeightFn) {
     else asphalt.push(ribbon(pts, w, 0))
     if (MAJOR.test(s.hw)) glow.push(ribbon(pts, 0.9, 0.12))
   }
-  return { asphalt: mergeGeometries(asphalt)!, glow: mergeGeometries(glow)!, minor: mergeGeometries(minor)! }
+  const merge = (l: THREE.BufferGeometry[]) => (l.length ? mergeGeometries(l)! : new THREE.BufferGeometry()) // una zona puede no tener escalinatas ni peatonales
+  return { asphalt: merge(asphalt), glow: merge(glow), minor: merge(minor) }
 }
 
 export function areasGeometry(areas: Area[], height: HeightFn, keep: (a: Area) => boolean) {

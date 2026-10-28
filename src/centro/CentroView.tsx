@@ -2,37 +2,43 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, MapPin, PanelsTopLeft, RefreshCw, Siren } from 'lucide-react'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { setView } from '../view'
+import { ZONES, zoneById, type ZoneId } from '../../shared/zones'
 import { AlertsPanel, Events, Kpis, Lines, ScenarioBar, VehiclePanel, type VehicleDetail } from './CentroPanel'
 import { CentroScene } from './CentroScene'
-import { loadCentro, type CentroData, type LL } from './data'
+import { loadZone, setZone, type CentroData, type LL } from './data'
 import type { Geofence } from './FleetLayers'
-import { runScenario, useFleet, type FleetAlert } from './useFleet'
+import { api, runScenario, useFleet, type FleetAlert } from './useFleet'
 import { VrEnter } from './VrEnter'
+import { DownloadBar, QualityPicker } from './QualityPicker'
+import { openQuickLook } from './quicklook'
 
 /** Ficha del vehículo seleccionado (chofer, ruta, recorrido reciente), refrescada cada 2 s. */
-function useVehicleDetail(id: number | null) {
+function useVehicleDetail(zone: ZoneId, id: number | null) {
   const [detail, setDetail] = useState<(VehicleDetail & { track: LL[] }) | null>(null)
   useEffect(() => {
     if (id == null) return
     let alive = true
-    const load = () => fetch(`/api/vehicles/${id}`).then((r) => (r.ok ? r.json() : null)).then((d) => alive && setDetail(d)).catch(() => {})
+    const load = () => fetch(`${api(zone)}/vehicles/${id}`).then((r) => (r.ok ? r.json() : null)).then((d) => alive && setDetail(d)).catch(() => {})
     void load()
     const t = setInterval(load, 2000)
     return () => { alive = false; clearInterval(t) }
-  }, [id])
+  }, [zone, id])
   return detail?.id === id ? detail : null
 }
 
-function useGeofences(live: boolean) {
+function useGeofences(zone: ZoneId, live: boolean) {
   const [list, setList] = useState<Geofence[]>([])
   useEffect(() => {
     if (!live || list.length) return
-    fetch('/api/geofences').then((r) => r.json()).then((fc) => setList(fc.features.map((f: any) => ({ ...f.properties, coords: f.geometry.coordinates[0] })))).catch(() => {})
-  }, [live, list.length])
+    fetch(`${api(zone)}/geofences`).then((r) => r.json()).then((fc) => setList(fc.features.map((f: any) => ({ ...f.properties, coords: f.geometry.coordinates[0] })))).catch(() => {})
+  }, [zone, live, list.length])
   return list
 }
 
-export function CentroView() {
+/** Vista detallada de una zona (el Centro y las demás): escena 3D, flota en vivo, alertas y escenarios. */
+export function CentroView({ zone: id }: { zone: ZoneId }) {
+  const zone = zoneById(id)!
+  setZone(zone) // ponytail: proyección de la zona activa antes de que se use (ver data.ts)
   const [data, setData] = useState<CentroData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
@@ -43,17 +49,17 @@ export function CentroView() {
   const [panels, setPanels] = useState(true)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const { snap, status, retry } = useFleet()
-  const detail = useVehicleDetail(selected)
-  const geofences = useGeofences(status === 'live')
+  const { snap, status, retry } = useFleet(id)
+  const detail = useVehicleDetail(id, selected)
+  const geofences = useGeofences(id, status === 'live')
 
   useEffect(() => {
     let alive = true
-    loadCentro().then((d) => alive && setData(d)).catch((e: Error) => alive && setError(e.message))
+    loadZone(id).then((d) => alive && setData(d)).catch((e: Error) => alive && setError(e.message))
     return () => { alive = false }
-  }, [])
+  }, [id])
 
-  // si el vehículo sale del Centro (pausa entre ida y vuelta) se deja de seguir
+  // si el vehículo sale de la zona (pausa entre ida y vuelta) se deja de seguir
   const live = snap?.vehicles.find((v) => v.id === selected) ?? null
   const select = (id: number | null) => { setSelected(id); if (id != null) setFollow(true) }
   /** Alerta con vehículo: sigue al vehículo. Alerta de zona (congestión): la cámara vuela al lugar. */
@@ -65,7 +71,7 @@ export function CentroView() {
   }
   const run = async (id: string) => {
     setBusy(true)
-    try { setMessage(await runScenario(id)) } catch { setMessage('No se pudo contactar a la API') }
+    try { setMessage(await runScenario(zone.id, id)) } catch { setMessage('No se pudo contactar a la API') }
     setBusy(false)
   }
   const toggleLine = (c: string) => setHidden((h) => { const n = new Set(h); if (n.has(c)) n.delete(c); else n.add(c); return n })
@@ -79,7 +85,7 @@ export function CentroView() {
           follow={follow} homeSeq={homeSeq} focusAt={focusAt} track={detail?.track ?? []} geofences={geofences}
           detail={detail} onToggleLine={toggleLine} onRun={run} busy={busy} message={message} />
       )}
-      {!data && <div className="loading">{error ? `No se pudieron cargar los datos del Centro: ${error}` : 'Cargando el Centro de La Paz…'}</div>}
+      {!data && <div className="loading">{error ? `No se pudieron cargar los datos de ${zone.name}: ${error}` : `Cargando ${zone.name}…`}</div>}
 
       <div className={`hud hud-centro ${panels ? '' : 'hud-min'}`}>
         <header className="top">
@@ -88,8 +94,13 @@ export function CentroView() {
               <ArrowLeft size={17} />
             </button>
             <div>
-              <h1>CENTRO <span>LA PAZ</span></h1>
-              <p>SEGUIMIENTO DE TRANSPORTE PÚBLICO</p>
+              <h1>{zone.name.toUpperCase()} <span>LA PAZ</span></h1>
+              <p className="zone-pick">
+                <select value={id} autoComplete="off" onChange={(e) => setView(e.target.value as ZoneId)} aria-label="Cambiar de zona">
+                  {ZONES.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+                </select>
+                <span>· SEGUIMIENTO DE TRANSPORTE PÚBLICO</span>
+              </p>
             </div>
           </div>
           <div className="top-right">
@@ -97,7 +108,8 @@ export function CentroView() {
             <span className="demo"><i />DEMO · SIMULACIÓN</span>
             <div className="clock"><small>HORA LA PAZ</small><b>{clock}</b></div>
             <div className="tools">
-              <VrEnter />
+              <QualityPicker sizes={data?.meta.sizes} />
+              <VrEnter onQuickLook={data ? () => openQuickLook(data) : undefined} />
               <ThemeToggle />
               <button className="icon-btn panels-toggle" aria-pressed={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>
                 <PanelsTopLeft size={17} />
@@ -118,17 +130,19 @@ export function CentroView() {
               <AlertsPanel snap={snap} onPick={goTo} />
               <Events snap={snap} />
             </aside>
-            <ScenarioBar snap={snap} busy={busy} message={message} onRun={run} onHome={() => { setSelected(null); setFocusAt(null); setHomeSeq((n) => n + 1) }} />
+            <ScenarioBar hotspot={zone.hotspot.name} snap={snap} busy={busy} message={message} onRun={run} onHome={() => { setSelected(null); setFocusAt(null); setHomeSeq((n) => n + 1) }} />
           </>
         )}
+
+        <DownloadBar />
 
         {jam && (
           <div className="banner banner-detected" role="alert" onClick={() => goTo(jam)}>
             <div className="banner-main">
               <Siren size={20} />
               <div>
-                <b>CONGESTIÓN · {String(jam.detail.via ?? 'El Prado').toUpperCase()}</b>
-                <span>{snap!.reroutes.length ? `Desvío sugerido para ${snap!.reroutes.map((r) => `${r.code} ${r.direction}`).join(', ')} dentro del Centro` : `${jam.detail.vehiculos} vehículos a ${jam.detail.velocidad_kmh} km/h en ${jam.detail.largo_m} m`}</span>
+                <b>CONGESTIÓN · {String(jam.detail.via ?? zone.hotspot.name).toUpperCase()}</b>
+                <span>{snap!.reroutes.length ? `Desvío sugerido para ${snap!.reroutes.map((r) => `${r.code} ${r.direction}`).join(', ')} dentro de ${zone.name}` : `${jam.detail.vehiculos} vehículos a ${jam.detail.velocidad_kmh} km/h en ${jam.detail.largo_m} m`}</span>
               </div>
             </div>
             <button className="banner-go" onClick={(e) => { e.stopPropagation(); goTo(jam) }}><MapPin size={14} />Ver en el mapa</button>
@@ -138,7 +152,7 @@ export function CentroView() {
         {status === 'offline' && (
           <div className="offline panel">
             <b>API de seguimiento sin conexión</b>
-            <span>La vista 3D del Centro funciona, pero los vehículos y alertas vienen del servidor. Inicia <code>docker compose up -d db</code> y <code>pnpm --dir server dev</code>.</span>
+            <span>La vista 3D de {zone.name} funciona, pero los vehículos y alertas vienen del servidor. Inicia <code>docker compose up -d db</code> y <code>pnpm --dir server dev</code>.</span>
             <button className="icon-btn wide" onClick={retry}><RefreshCw size={15} />Reintentar</button>
           </div>
         )}

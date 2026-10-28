@@ -23,5 +23,5 @@ dist-ssr
 *.sln
 *.sw?
 
-# caché de descargas de datos (scripts/centro/fetch.ts)
-scripts/centro/.cache
+# caché de descargas de datos (scripts/zonas/fetch.ts)
+scripts/zonas/.cache

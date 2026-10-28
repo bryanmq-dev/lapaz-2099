@@ -1,0 +1,36 @@
+{
+  "zone": "alto",
+  "sizes": {
+    "elevation": 321761,
+    "streets": 320954,
+    "areas": 52351,
+    "buildings": 924188,
+    "buildings-extra": 2023089,
+    "landmarks": 1123,
+    "routes": 7218,
+    "lines": 2047
+  },
+  "name": "El Alto",
+  "bbox": {
+    "s": -16.522,
+    "w": -68.182,
+    "n": -16.498,
+    "e": -68.152
+  },
+  "origin": {
+    "lat": -16.5045,
+    "lon": -68.163
+  },
+  "hotspot": {
+    "name": "La Ceja",
+    "short": "La Ceja",
+    "at": [
+      -68.1628,
+      -16.5048
+    ],
+    "x": 21,
+    "z": 33
+  },
+  "generated": "2026-10-27",
+  "attribution": "© OpenStreetMap contributors (ODbL) · Elevación: AWS Terrain Tiles (SRTM y otras fuentes)"
+}

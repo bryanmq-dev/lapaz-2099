@@ -1,0 +1,36 @@
+{
+  "zone": "sopocachi",
+  "sizes": {
+    "elevation": 321351,
+    "streets": 511233,
+    "areas": 110317,
+    "buildings": 1225921,
+    "buildings-extra": 1951022,
+    "landmarks": 1048,
+    "routes": 15254,
+    "lines": 2517
+  },
+  "name": "Sopocachi",
+  "bbox": {
+    "s": -16.526,
+    "w": -68.142,
+    "n": -16.502,
+    "e": -68.112
+  },
+  "origin": {
+    "lat": -16.5104,
+    "lon": -68.1268
+  },
+  "hotspot": {
+    "name": "Plaza Abaroa",
+    "short": "Plaza Abaroa",
+    "at": [
+      -68.1268,
+      -16.5104
+    ],
+    "x": 0,
+    "z": 0
+  },
+  "generated": "2026-10-27",
+  "attribution": "© OpenStreetMap contributors (ODbL) · Elevación: AWS Terrain Tiles (SRTM y otras fuentes)"
+}

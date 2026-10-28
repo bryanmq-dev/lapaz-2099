@@ -3,9 +3,9 @@
 Gemelo digital de La Paz con dos vistas:
 
 1. **Ciudad**: visión conceptual de toda la ciudad (simulación en el navegador).
-2. **Centro**: el Centro reconstruido con datos reales de OpenStreetMap y elevación SRTM. Muestra el seguimiento de 3 líneas reales de minibús y trufi y de una flota simulada de ~250 minibuses, con alertas espaciales en PostGIS, congestión que se forma sola en El Prado, el Obelisco y la Av. Camacho, y desvíos sugeridos dentro de la zona.
+2. **Zonas en detalle**: el Centro, El Alto, Sopocachi y Calacoto, reconstruidos con datos reales de OpenStreetMap y elevación SRTM. Cada zona muestra el seguimiento de 3 líneas reales y de una flota simulada de minibuses, con alertas espaciales en PostGIS, una hora punta que congestiona sola su cruce principal y desvíos sugeridos dentro de la zona. Se puede ver como maqueta en VR, en realidad mixta (Quest, Android) o con AR Quick Look (iPad, iPhone).
 
-Todos los datos de flota, tráfico y alertas son **simulados**. Ver [docs/caso-estudio-rutas.md](docs/caso-estudio-rutas.md), [docs/explicacion-tecnica.md](docs/explicacion-tecnica.md) (cómo funciona todo, de punta a punta) y [CHANGELOG.md](CHANGELOG.md).
+Todos los datos de flota, tráfico y alertas son **simulados**. Ver [docs/fuentes.md](docs/fuentes.md) (de dónde sale cada dato), [docs/caso-estudio-rutas.md](docs/caso-estudio-rutas.md), [docs/explicacion-tecnica.md](docs/explicacion-tecnica.md) (cómo funciona todo, de punta a punta) y [CHANGELOG.md](CHANGELOG.md).
 
 ## Ejecutar
 
@@ -19,22 +19,26 @@ Desarrollo:
 
 ```sh
 pnpm install && pnpm --dir server install
-docker compose up -d db          # PostGIS en el puerto 5433
-pnpm --dir server dev            # API + simulador en :3001 (migra y carga datos al iniciar)
+# PostGIS local (el docker-compose.yml no publica puertos: está pensado para producción)
+docker run -d --name lapaz-dev-db -e POSTGRES_USER=lapaz -e POSTGRES_PASSWORD=lapaz -e POSTGRES_DB=lapaz \
+  -p 127.0.0.1:5434:5432 -v lapaz-dev-pgdata:/var/lib/postgresql/data postgis/postgis:17-3.5
+DATABASE_URL=postgres://lapaz:lapaz@localhost:5434/lapaz pnpm --dir server dev   # API + simulador en :3001
 pnpm dev                         # web en :5173 (redirige /api a :3001)
 ```
 
-La vista ciudad funciona sin la API. La vista del Centro muestra el mapa 3D sin la API, pero los vehículos y las alertas vienen del servidor.
+La primera vez la API carga los datos y la flota de cada zona (una tras otra, en segundo plano). Cada zona simula solo mientras alguien la mira. La vista ciudad funciona sin la API; las zonas muestran el mapa 3D sin la API, pero los vehículos y las alertas vienen del servidor.
+
+Calidad de la ciudad: selector en la cabecera de cada zona (Automática, Alta, Media, Baja), con lo que descarga cada nivel. «Automática» se elige según el dispositivo y baja si caen los FPS; la calidad baja descarga ~40 % de los edificios. También se puede forzar con `?calidad=alta|media|baja`.
 
 ## Comprobaciones
 
 ```sh
 pnpm exec tsc -b && pnpm lint && pnpm build
 pnpm check:sim                   # motor de la vista ciudad
-pnpm --dir server check          # escenarios contra PostGIS real (base aparte: lapaz_check)
+ADMIN_URL=postgres://lapaz:lapaz@localhost:5434/lapaz pnpm --dir server check [zona]   # escenarios contra PostGIS real (base aparte: lapaz_check)
 ```
 
 ## Datos
 
-`node scripts/centro/fetch.ts` regenera `public/centro/` desde OpenStreetMap (Overpass) y AWS Terrain Tiles (usa caché en `scripts/centro/.cache`; con `--refresh` descarga de nuevo).
+`node scripts/zonas/fetch.ts <zona…|--all>` regenera `public/zonas/<zona>/` desde OpenStreetMap (Overpass) y AWS Terrain Tiles (usa caché en `scripts/zonas/.cache`; con `--refresh` descarga de nuevo; con `--discover` lista las rutas de transporte de la zona). Las zonas se definen en `shared/zones.ts`. Fuentes y licencias: [docs/fuentes.md](docs/fuentes.md).
 © OpenStreetMap contributors, ODbL.
