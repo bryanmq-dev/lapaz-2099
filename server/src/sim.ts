@@ -293,7 +293,7 @@ export class Simulator {
 
   /** Al terminar el tramo de la zona, el vehículo vuelve en el sentido contrario (ida ↔ vuelta). */
   private switchDirection(v: Vehicle) {
-    const next = this.routes.find((r) => r.code === v.code && r.direction !== v.route.direction)!
+    const next = this.routes.find((r) => r.code === v.code && r.direction !== v.route.direction) ?? v.route
     v.route = next
     v.path = next.active
     v.segAt = next.activeSegAt

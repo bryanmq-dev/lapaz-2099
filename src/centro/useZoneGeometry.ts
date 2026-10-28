@@ -43,20 +43,20 @@ export const useDownload = () => useSyncExternalStore((fn) => { subs.add(fn); re
  * Geometría pesada de la zona, construida en un Web Worker. `extra` descarga también los edificios estimados bajos;
  * `minH` > 0 omite los edificios bajos sin nombre. `sizes` (meta.json) permite mostrar el avance en MB.
  */
-export function useZoneGeometry(zone: ZoneId, light: boolean, minH: number, extra: boolean, sizes?: Record<string, number>) {
+export function useZoneGeometry(zone: ZoneId, light: boolean, minH: number, extra: boolean, sizes?: Record<string, number>, routesOnly = false) {
   const [geo, setGeo] = useState<{ key: string; g: ZoneGeometry } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const key = `${zone}|${light}|${minH}|${extra}`
+  const key = `${zone}|${light}|${minH}|${extra}|${routesOnly}`
   useEffect(() => {
     let alive = true
-    void request({ zone, light, minH, extra, sizes }, (p) => alive && setDownload({ ...p, building: p.loaded >= p.total })).then((r) => {
+    void request({ zone, light, minH, extra, sizes, routesOnly }, (p) => alive && setDownload({ ...p, building: p.loaded >= p.total })).then((r) => {
       if (!alive) return
       setDownload(null)
       if (r.error) { setError(r.error); return }
       setGeo({ key, g: Object.fromEntries(Object.entries(r.geos).map(([k, p]) => [k, unpack(p)])) as ZoneGeometry })
     })
     return () => { alive = false; setDownload(null) }
-  }, [zone, light, minH, extra, key, sizes])
+  }, [zone, light, minH, extra, key, sizes, routesOnly])
   // la geometría anterior se libera al reemplazarse
   useEffect(() => () => { if (geo) for (const g of Object.values(geo.g)) g.dispose() }, [geo])
   return { geo: geo?.g ?? null, stale: geo != null && geo.key !== key, error }

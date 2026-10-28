@@ -25,3 +25,10 @@ dist-ssr
 
 # caché de descargas de datos (scripts/zonas/fetch.ts)
 scripts/zonas/.cache
+
+scripts/metro/.cache
+public/metro/.staging
+
+# versiones generadas del mapa metropolitano (node scripts/metro/fetch.ts)
+public/metro/v*/
+public/metro/current.json

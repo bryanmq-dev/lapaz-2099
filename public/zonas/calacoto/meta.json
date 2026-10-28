@@ -8,7 +8,8 @@
     "buildings-extra": 1600797,
     "landmarks": 1084,
     "routes": 32300,
-    "lines": 2500
+    "lines": 2500,
+    "references": 2872
   },
   "name": "Calacoto",
   "bbox": {

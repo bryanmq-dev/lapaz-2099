@@ -8,7 +8,8 @@
     "buildings-extra": 2305698,
     "landmarks": 1137,
     "routes": 21974,
-    "lines": 2341
+    "lines": 2341,
+    "references": 2753
   },
   "name": "Centro",
   "bbox": {

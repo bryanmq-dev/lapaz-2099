@@ -30,6 +30,10 @@ La primera vez la API carga los datos y la flota de cada zona (una tras otra, en
 
 Calidad de la ciudad: selector en la cabecera de cada zona (Automática, Alta, Media, Baja), con lo que descarga cada nivel. «Automática» se elige según el dispositivo y baja si caen los FPS; la calidad baja descarga ~40 % de los edificios. También se puede forzar con `?calidad=alta|media|baja`.
 
+### Mapa unificado
+
+`#metropolitano` abre La Paz y El Alto juntas. Los datos (≈90 MB, no se versionan) se generan con `node scripts/metro/fetch.ts` (Node 24+; con `python scripts/metro/from-pbf.py <bolivia.osm.pbf>` antes si Overpass no responde) y la API los lee de `public/metro/current.json`. La primera apertura crea el esquema `metro` (≈1 min) y calienta el simulador vial (≈20 s). Si ya tienes otra API en :3001, `API_URL=http://localhost:3002 pnpm dev`. Prueba del motor de teleféricos: `node --test server/src/cable.test.ts`.
+
 ## Comprobaciones
 
 ```sh

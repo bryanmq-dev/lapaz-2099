@@ -209,7 +209,7 @@ export async function seed(db: ZoneDb) {
     const rand = rng(2050)
     let n = 0
     for (const l of lines) {
-      for (let i = 0; i < (FLEET[l.code] ?? 8); i++) {
+      for (let i = 0; i < (zone.id === 'metro' ? 3 : (FLEET[l.code] ?? 8)); i++) {
         n++
         const name = `${FIRST[Math.floor(rand() * FIRST.length)]} ${LAST[Math.floor(rand() * LAST.length)]} ${LAST[Math.floor(rand() * LAST.length)]}`
         const plate = `${1000 + Math.floor(rand() * 8999)}-${[0, 1, 2].map(() => LETTERS[Math.floor(rand() * LETTERS.length)]).join('')}`
@@ -220,7 +220,7 @@ export async function seed(db: ZoneDb) {
         await client.query(
           `INSERT INTO vehicles (plate, kind, union_id, driver_id, route_id)
            SELECT $1, $2, u.id, $3, r.id FROM unions u, routes r WHERE u.name = $4 AND r.code = $5 AND r.direction = $6`,
-          [plate, l.mode, u.id, l.union, l.code, i % 2 ? 'vuelta' : 'ida'],
+          [plate, l.mode, u.id, l.union, l.code, i % 2 && routes.some((r: any) => r.code === l.code && r.direction === 'vuelta') ? 'vuelta' : 'ida'],
         )
       }
     }

@@ -7,7 +7,8 @@
 // mosaicos de elevación Terrarium (AWS Terrain Tiles, derivados de SRTM y otros).
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { inflateSync } from 'node:zlib'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { ZONES, type Zone } from '../../shared/zones.ts'
 
 const MARGIN_M = 450 // el terreno se extiende un poco más allá del recuadro
@@ -18,7 +19,7 @@ let BBOX = ZONE.bbox
 let ORIGIN = ZONE.origin
 let OUT = '', CACHE = '', bb = ''
 const UA = 'lapaz2050-digital-twin/0.2 (academic demo; Univalle La Paz)'
-const MIRRORS = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
+const MIRRORS = ['https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter']
 const REFRESH = process.argv.includes('--refresh')
 const DISCOVER = process.argv.includes('--discover')
 // --try=código:ida:vuelta,…  evalúa líneas candidatas como quedarían en la simulación (sin tocar public/)
@@ -27,18 +28,20 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // ---- descargas con caché y reintentos -------------------------------------
 
-async function overpass(name: string, query: string): Promise<any> {
+export async function overpass(name: string, query: string): Promise<any> {
   const file = join(CACHE, `${name}.json`)
   if (!REFRESH && existsSync(file)) return JSON.parse(readFileSync(file, 'utf8'))
   let wait = 8000
-  for (let attempt = 1; attempt <= 10; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     for (const url of MIRRORS) {
       try {
-        const res = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query) })
+        const res = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(210000) })
         if (res.ok) {
           const json = await res.json()
+          if (json.remark) throw new Error(json.remark)
           writeFileSync(file, JSON.stringify(json))
           console.log(`  ✓ ${name} (${json.elements.length} elementos, ${url})`)
+          await sleep(2000) // una sola consulta activa, con pausa entre bloques
           return json
         }
         console.log(`  … ${name}: HTTP ${res.status} en ${url}`)
@@ -106,8 +109,8 @@ const lineLength = (p: LL[]) => p.reduce((s, q, i) => (i ? s + meters(p[i - 1], 
 
 // ---- 1. elevación -----------------------------------------------------------
 
-async function elevation() {
-  const Z = 15, n = 2 ** Z
+export async function elevation(step = 15, zoom = 15) {
+  const Z = zoom, n = 2 ** Z
   const [x0m, z0m] = toLocal(BBOX.w, BBOX.n).map((v) => v - MARGIN_M)
   const [x1m, z1m] = toLocal(BBOX.e, BBOX.s).map((v) => v + MARGIN_M)
   const [wl, nl] = toLonLat(x0m, z0m), [el, sl] = toLonLat(x1m, z1m)
@@ -127,14 +130,14 @@ async function elevation() {
     const ix = Math.floor(gx), iy = Math.floor(gy), fx = gx - ix, fy = gy - iy
     return (at(ix, iy) * (1 - fx) + at(ix + 1, iy) * fx) * (1 - fy) + (at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx) * fy
   }
-  const STEP = 15
+  const STEP = step
   const w = Math.round((x1m - x0m) / STEP) + 1, h = Math.round((z1m - z0m) / STEP) + 1
   const vals: number[] = []
   for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
     const [lon, lat] = toLonLat(x0m + i * STEP, z0m + j * STEP)
     vals.push(sample(lon, lat))
   }
-  const min = Math.floor(Math.min(...vals)), max = Math.ceil(Math.max(...vals))
+  const min = Math.floor(vals.reduce((a, b) => Math.min(a, b), Infinity)), max = Math.ceil(vals.reduce((a, b) => Math.max(a, b), -Infinity))
   writeFileSync(join(OUT, 'elevation.json'), JSON.stringify({ x0: x0m, z0: z0m, step: STEP, w, h, min, max, dm: vals.map((v) => Math.round((v - min) * 10)) }))
   console.log(`  ✓ elevation.json ${w}×${h}, ${min}–${max} m s. n. m.`)
   return sample
@@ -145,7 +148,7 @@ async function elevation() {
 const DRAW = /^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|pedestrian|service|steps|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$/
 const ROUTABLE = /^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$/
 
-async function streets() {
+export async function streets() {
   const raw = await overpass('streets', `[out:json][timeout:180];way["highway"](${bb});out body geom;`)
   const ways = raw.elements.filter((w: any) => DRAW.test(w.tags.highway) && w.tags.area !== 'yes')
   const out = ways.map((w: any) => ({
@@ -206,7 +209,7 @@ function buildingHeight(t: Record<string, string>, c: LL): number {
   return Math.round(base * (0.6 + seed * 0.9))
 }
 
-async function buildingsAndAreas(sample: (lon: number, lat: number) => number) {
+export async function buildingsAndAreas(sample: (lon: number, lat: number) => number) {
   const raw = await overpass('buildings', `[out:json][timeout:180];way["building"](${bb});out tags geom;`)
   const out: any[] = []
   for (const w of raw.elements) {
@@ -214,7 +217,7 @@ async function buildingsAndAreas(sample: (lon: number, lat: number) => number) {
     if (pts.length < 4 || !pts.some(inBox)) continue
     const c: LL = [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length]
     const base = Math.min(...pts.map((p) => sample(p[0], p[1])))
-    out.push({ h: buildingHeight(w.tags, c), b: Math.round(base * 10) / 10, k: w.tags.building, n: w.tags.name, pts: pts.slice(0, -1) })
+    out.push({ osm: w.id, h: buildingHeight(w.tags, c), b: Math.round(base * 10) / 10, k: w.tags.building, n: w.tags.name, pts: pts.slice(0, -1) })
   }
   writeFileSync(join(OUT, 'buildings.json'), JSON.stringify(out))
   const tagged = raw.elements.filter((w: any) => w.tags['building:levels'] || w.tags.height).length
@@ -398,7 +401,7 @@ function bridge(segs: Seg[], a: LL, b: LL): LL[] | null {
   return parts.flatMap((p, i) => (i ? p.slice(1) : p))
 }
 
-function chain(rel: any, wayTags: Map<number, Record<string, string>>, segs: Seg[]) {
+export function chain(rel: any, wayTags: Map<number, Record<string, string>>, segs: Seg[]) {
   const members = rel.members.filter((m: any) => m.type === 'way' && ['', 'forward', 'backward'].includes(m.role ?? '') && m.geometry?.length)
   const line: LL[] = []
   const issues: string[] = []
@@ -554,12 +557,13 @@ async function build(zone: Zone) {
   writeFileSync(join(OUT, 'buildings.json'), JSON.stringify(all.filter(core)))
   writeFileSync(join(OUT, 'buildings-extra.json'), JSON.stringify(all.filter((b) => !core(b))))
   console.log(`  ✓ buildings.json: ${real.length} reales de OSM + ${est.length} estimados (relleno de manzanas)`)
+  writeFileSync(join(OUT, 'references.json'), JSON.stringify(real.filter((b: any) => b.n).sort((a: any, b: any) => b.h - a.h).slice(0, 10)))
   await landmarks()
   await schools()
   await routes(streetEls, segs)
   const [hx, hz] = toLocal(zone.hotspot.at[0], zone.hotspot.at[1])
   // tamaño de cada archivo (bytes): el front estima cuánto descarga cada nivel de calidad
-  const sizes = Object.fromEntries(['elevation', 'streets', 'areas', 'buildings', 'buildings-extra', 'landmarks', 'routes', 'lines']
+  const sizes = Object.fromEntries(['elevation', 'streets', 'areas', 'buildings', 'buildings-extra', 'references', 'landmarks', 'routes', 'lines']
     .filter((f) => existsSync(join(OUT, `${f}.json`))).map((f) => [f, statSync(join(OUT, `${f}.json`)).size]))
   writeFileSync(join(OUT, 'meta.json'), JSON.stringify({
     zone: zone.id, sizes, name: zone.name, bbox: BBOX, origin: ORIGIN, hotspot: { ...zone.hotspot, x: Math.round(hx), z: Math.round(hz) },
@@ -569,10 +573,20 @@ async function build(zone: Zone) {
   console.log('Listo →', OUT)
 }
 
+export function configure(zone: Zone, out: string, cache: string) {
+  ZONE = zone; BBOX = zone.bbox; ORIGIN = zone.origin
+  KX = 111320 * Math.cos((ORIGIN.lat * Math.PI) / 180)
+  OUT = out; CACHE = cache; bb = `${BBOX.s},${BBOX.w},${BBOX.n},${BBOX.e}`
+  mkdirSync(OUT, { recursive: true }); mkdirSync(CACHE, { recursive: true })
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
 const ids = process.argv.includes('--all') ? ZONES.map((z) => z.id) : process.argv.slice(2).filter((a) => !a.startsWith('--'))
 if (!ids.length) { console.log(`uso: node scripts/zonas/fetch.ts [--refresh] [--discover] <${ZONES.map((z) => z.id).join('|')}…|--all>`); process.exit(1) }
 for (const id of ids) {
   const z = ZONES.find((x) => x.id === id)
   if (!z) throw new Error(`zona desconocida: ${id}`)
   await build(z)
+}
+
 }

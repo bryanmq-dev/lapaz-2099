@@ -14,9 +14,9 @@ export const STREET_WIDTH: Record<string, number> = {
 export const MAJOR = /^(motorway|trunk|primary|secondary)(_link)?$/
 
 /** Densifica una polilínea (en metros) y la apoya sobre el terreno. */
-export function drape(pts: LL[], height: HeightFn, lift: number, every = 6): THREE.Vector3[] {
+export function drape(pts: LL[], height: HeightFn, lift: number, every = 6, projection = project): THREE.Vector3[] {
   const out: THREE.Vector3[] = []
-  const p = pts.map(project)
+  const p = pts.map(projection)
   for (let i = 0; i < p.length; i++) {
     if (i) {
       const [ax, az] = p[i - 1], [bx, bz] = p[i]
@@ -64,11 +64,11 @@ export function terrainGeometry(el: Elevation, light = false) {
 // ---- edificios (una sola malla; ventanas en el shader) -------------------------
 
 /** Extrusión propia: paredes con coordenadas de fachada (u, v) para el patrón de ventanas + techo triangulado. */
-export function buildingsGeometry(list: Building[], minElev: number, light = false) {
+export function buildingsGeometry(list: Building[], minElev: number, light = false, projection = project) {
   const pos: number[] = [], nor: number[] = [], col: number[] = [], win: number[] = [], idx: number[] = []
   const real = new THREE.Color(light ? '#dfe3e8' : '#6f8fb0'), est = new THREE.Color(light ? '#c6ccd4' : '#3f5874'), named = new THREE.Color(light ? '#f3d9b8' : '#a8c6e4')
   for (const b of list) {
-    let ring = b.pts.map(project)
+    let ring = b.pts.map(projection)
     if (THREE.ShapeUtils.isClockWise(ring.map(([x, z]) => new THREE.Vector2(x, -z)))) ring = ring.reverse()
     const y0 = b.b - minElev - 2, y1 = b.b - minElev + b.h, H = b.h + 2
     const tone = b.n ? named : b.e ? est : real
@@ -138,10 +138,10 @@ export function buildingsMaterial(light = false) {
 
 // ---- calles, áreas y rutas ------------------------------------------------------
 
-export function streetGeometries(streets: Street[], height: HeightFn) {
+export function streetGeometries(streets: Street[], height: HeightFn, projection = project, every = 6) {
   const asphalt: THREE.BufferGeometry[] = [], glow: THREE.BufferGeometry[] = [], minor: THREE.BufferGeometry[] = []
   for (const s of streets) {
-    const pts = drape(s.pts, height, 0.6)
+    const pts = drape(s.pts, height, 0.6, every, projection)
     if (pts.length < 2) continue
     const w = STREET_WIDTH[s.hw] ?? 6
     if (s.hw === 'steps' || s.hw === 'pedestrian') minor.push(ribbon(pts, w, 0))
@@ -152,11 +152,11 @@ export function streetGeometries(streets: Street[], height: HeightFn) {
   return { asphalt: merge(asphalt), glow: merge(glow), minor: merge(minor) }
 }
 
-export function areasGeometry(areas: Area[], height: HeightFn, keep: (a: Area) => boolean) {
+export function areasGeometry(areas: Area[], height: HeightFn, keep: (a: Area) => boolean, projection = project) {
   const parts: THREE.BufferGeometry[] = []
   for (const a of areas) {
     if (!keep(a) || a.pts.length < 3) continue
-    const ring = a.pts.map(project)
+    const ring = a.pts.map(projection)
     const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, z]) => new THREE.Vector2(x, z)), [])
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(ring.flatMap(([x, z]) => [x, height(x, z) + 0.45, z]), 3))

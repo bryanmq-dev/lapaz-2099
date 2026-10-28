@@ -8,7 +8,8 @@
     "buildings-extra": 2023089,
     "landmarks": 1123,
     "routes": 7218,
-    "lines": 2047
+    "lines": 2047,
+    "references": 1730
   },
   "name": "El Alto",
   "bbox": {

@@ -8,6 +8,8 @@ import './styles.css'
 // la vista detallada (three.js de las zonas, XR, worker) se descarga solo al abrir una zona
 const CentroView = lazy(() => import('./centro/CentroView').then((m) => ({ default: m.CentroView })))
 
+const MetroView = lazy(() => import('./metro/MetroView').then((m) => ({ default: m.MetroView })))
+
 function CityView() {
   useSimClock()
   const view = useSimulation()
@@ -25,7 +27,7 @@ export default function App() {
   const view = useView()
   return view === 'city' ? <CityView /> : (
     <Suspense fallback={<div className="loading">Cargando la vista detallada…</div>}>
-      <CentroView key={view} zone={view} />
+      {view === 'metropolitano' ? <MetroView /> : <CentroView key={view} zone={view} />}
     </Suspense>
   )
 }

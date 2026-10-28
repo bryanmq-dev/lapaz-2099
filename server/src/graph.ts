@@ -11,6 +11,7 @@ export class RoadGraph {
   readonly segments = new Map<number, Segment>()
   private adj = new Map<number, Edge[]>()
   private nodes = new Map<number, XZ>()
+  private cells = new Map<string, Set<Segment>>()
 
   constructor(project: Projector['project'], rows: { id: number; name: string; highway: string; oneway: number; source: string; target: string; length_m: number; congestion: number; coords: LL[] }[]) {
     for (const r of rows) {
@@ -19,6 +20,12 @@ export class RoadGraph {
         length: r.length_m, congestion: r.congestion, pts: r.coords.map(project),
       }
       this.segments.set(s.id, s)
+      const xs = s.pts.map((p) => p[0]), zs = s.pts.map((p) => p[1])
+      for (let x = Math.floor(Math.min(...xs) / 250); x <= Math.floor(Math.max(...xs) / 250); x++)
+        for (let z = Math.floor(Math.min(...zs) / 250); z <= Math.floor(Math.max(...zs) / 250); z++) {
+          const key = `${x},${z}`; let cell = this.cells.get(key)
+          if (!cell) { cell = new Set(); this.cells.set(key, cell) }; cell.add(s)
+        }
       this.nodes.set(s.source, s.pts[0])
       this.nodes.set(s.target, s.pts[s.pts.length - 1])
       if (s.oneway >= 0) this.edge(s.source, { to: s.target, seg: s, forward: true })
@@ -35,6 +42,12 @@ export class RoadGraph {
 
   nearestSegment(p: XZ): Segment {
     let best: Segment | null = null, bd = Infinity
+    const candidates = new Set<Segment>()
+    const cx = Math.floor(p[0] / 250), cz = Math.floor(p[1] / 250)
+    for (let x = cx - 1; x <= cx + 1; x++) for (let z = cz - 1; z <= cz + 1; z++)
+      for (const s of this.cells.get(`${x},${z}`) ?? []) candidates.add(s)
+    for (const s of candidates) { const d = distToLine(p, s.pts); if (d < bd) { bd = d; best = s } }
+    if (bd < 250) return best!
     for (const s of this.segments.values()) {
       if (dist(p, s.pts[0]) - s.length > bd) continue // descarte rápido
       const d = distToLine(p, s.pts)

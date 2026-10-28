@@ -22,10 +22,11 @@ import { useZoneGeometry } from './useZoneGeometry'
 
 function Static({ data, height, inXR }: { data: CentroData; height: HeightFn; inXR: boolean }) {
   const light = useTheme() === 'light'
-  const q = TIERS[useTier()]
+  const tier = useTier()
+  const q = TIERS[tier]
   // en la maqueta los edificios bajos y sin nombre miden milímetros: se omiten para aligerar la escena
   const minH = inXR ? Math.max(VR.minBuildingH, q.minH) : q.minH
-  const { geo } = useZoneGeometry(data.meta.zone, light, minH, q.extra, data.meta.sizes)
+  const { geo } = useZoneGeometry(data.meta.zone, light, minH, q.extra, data.meta.sizes, tier === 'rutas')
   const terrainMat = useMemo(() => contourMaterial({ density: 0.1, intensity: light ? 0.04 : 0.14, fadeFrom: 9000, fadeTo: 9999 }), [light])
   const buildingsMat = useMemo(() => buildingsMaterial(light), [light])
   if (!geo) return null

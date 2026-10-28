@@ -10,7 +10,7 @@ import { areasGeometry, buildingsGeometry, streetGeometries, terrainGeometry } f
  * `ql`: versión liviana para AR Quick Look (USDZ va sin comprimir): solo edificios reales, terreno a 1/3, avenidas.
  * `sizes`: bytes de cada archivo (meta.json), para informar el avance de la descarga.
  */
-export interface GeoRequest { id: number; zone: ZoneId; light: boolean; minH: number; extra: boolean; ql?: boolean; sizes?: Record<string, number> }
+export interface GeoRequest { id: number; zone: ZoneId; light: boolean; minH: number; extra: boolean; ql?: boolean; routesOnly?: boolean; sizes?: Record<string, number> }
 export type Packed = { attrs: [string, ArrayLike<number>, number][]; index: ArrayLike<number> | null }
 /** Respuesta final (`geos`) o avance de la descarga (`progress`, varias veces antes de la respuesta). */
 export interface GeoResponse { id: number; geos?: Record<string, Packed>; progress?: { loaded: number; total: number }; error?: string }
@@ -60,10 +60,10 @@ function pack(g: THREE.BufferGeometry, out: Transferable[]): Packed {
 }
 
 self.onmessage = async (e: MessageEvent<GeoRequest>) => {
-  const { id, zone, light, minH, extra, ql, sizes = {} } = e.data
+  const { id, zone, light, minH, extra, ql, routesOnly, sizes = {} } = e.data
   try {
     setZone(zoneById(zone)!)
-    const names = ['elevation', 'streets', 'areas', 'buildings', ...(extra && !ql ? ['buildings-extra'] : [])]
+    const names = ['elevation', 'streets', 'areas', routesOnly ? 'references' : 'buildings', ...(extra && !ql ? ['buildings-extra'] : [])]
     // avance: solo cuenta lo que aún no se había descargado (al subir de nivel, solo el archivo extra)
     const total = names.filter((f) => !loaded(zone, f)).reduce((a, f) => a + (sizes[f] ?? 0), 0)
     let got = 0, last = 0
