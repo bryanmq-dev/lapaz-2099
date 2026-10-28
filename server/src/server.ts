@@ -1,3 +1,4 @@
+import { registerMetro } from './metro.ts'
 import Fastify, { type FastifyReply } from 'fastify'
 import { openZone, seed, waitForDb, type ZoneDb } from './db.ts'
 import { seedFleet } from './fleet.ts'
@@ -138,6 +139,7 @@ function routes(prefix: string, idOf: (params: any) => string) {
 }
 routes('/api/zones/:zone', (p) => p.zone)
 routes('/api', () => 'centro')
+registerMetro(app)
 
 async function main() {
   await waitForDb()

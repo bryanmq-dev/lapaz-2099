@@ -12,5 +12,5 @@ export default defineConfig({
     ...(process.env.HTTPS ? [basicSsl()] : []),
   ],
   // API de seguimiento (server/) en desarrollo
-  server: { host: process.env.HTTPS ? true : undefined, proxy: { '/api': 'http://localhost:3001' } },
+  server: { host: process.env.HTTPS ? true : undefined, proxy: { '/api': process.env.API_URL ?? 'http://localhost:3001' } },
 })

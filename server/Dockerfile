@@ -9,6 +9,7 @@ COPY server/src ./src
 COPY shared /app/shared
 COPY db /app/db
 COPY public/zonas /app/public/zonas
+COPY public/metro /app/public/metro
 ENV NODE_ENV=production PORT=3001
 EXPOSE 3001
 CMD ["node", "src/server.ts"]
