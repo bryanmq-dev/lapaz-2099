@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 
 ## [Sin publicar]
 
+### Cambiado (auditoría de UX y responsive)
+- **Cabecera responsive** en Ciudad, Zona y Mi Teleférico: ya no se parte, solapa ni sale de la pantalla en móvil, tablet y móvil horizontal; botones de navegación con icono («Mi Teleférico»); sin botón de pantalla completa en móvil.
+- **Paneles de la zona en móvil:** se abren como hoja con el botón de paneles (antes no había forma de verlos) y se abren solos al elegir un vehículo; KPIs en 2×2.
+- **Mi Teleférico en móvil:** panel plegado por defecto, que se cierra al elegir una estación para ver el zoom; los controles quedan por encima de las etiquetas; pantalla de carga; calles de la vista general más visibles.
+- **Accesibilidad:** objetivos táctiles de 44 px con puntero táctil, textos mínimos de 11 px, tema claro con cian, verde y ámbar de contraste ≥ 4.5:1, paleta de Mi Teleférico unificada con los tokens globales, sin destello blanco al abrir, selector de calidad con etiqueta corta («Auto · Baja»).
+- **Móvil en horizontal:** se ocultan KPIs y paneles para dejar el mapa libre.
+
 ### Agregado
 - **Mapa unificado · La Paz y El Alto** (`#metropolitano`): una sola escena continua con relieve, calles y edificios por sectores que se descargan según la cámara. Vista «Mi Teleférico 2050»: registro de eventos y panel plegable.
 - **Teleféricos de Mi Teleférico** (las 10 líneas, 45 estaciones de OSM, transbordos tomados de las relaciones y no de la cercanía): cabinas con modelo 3D detallado (carcasa del color de la línea, ventanales, techo con panel solar, brazo y carro) en dos cables por línea, con retorno en terminales, tres estados por línea (normal, mantenimiento, detenido), incidentes automáticos reproducibles por semilla y cambios manuales. Estado y movimiento **simulados**; alturas del cable aproximadas.
