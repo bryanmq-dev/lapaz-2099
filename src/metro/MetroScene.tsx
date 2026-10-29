@@ -154,7 +154,7 @@ function World(props: Props) {
   const light = useTheme() === 'light', controls = useRef<any>(null)
   const height = useMemo(() => makeHeight(props.data.elevation), [props.data.elevation])
   const terrain = useMemo(() => terrainGeometry(props.data.elevation, light), [props.data.elevation, light])
-  const overview = useMemo(() => streetGeometries(props.data.overview, height, metroProjection.project, 90), [props.data.overview, height])
+  const overview = useMemo(() => streetGeometries(props.data.overview, height, metroProjection.project, 140), [props.data.overview, height])
   const cabin = useMemo(() => cabinGeometry(), [])
   useEffect(() => () => terrain.dispose(), [terrain])
   useEffect(() => () => dispose(overview), [overview])
@@ -163,12 +163,12 @@ function World(props: Props) {
     <color attach="background" args={[SCENE[light ? 'light' : 'dark'].bg]} />
     <ambientLight intensity={1.4} /><directionalLight position={[2000, 9000, 3000]} intensity={2} />
     <mesh geometry={terrain}><meshStandardMaterial vertexColors roughness={1} side={THREE.DoubleSide} /></mesh>
-    <mesh geometry={overview.asphalt}><meshBasicMaterial color={light ? '#687e88' : '#59758b'} /></mesh>
+    <mesh geometry={overview.asphalt}><meshBasicMaterial color={light ? '#4f6672' : '#7597ae'} /></mesh>
     <Sectors {...props} light={light} controls={controls} />
     {props.data.cable.lines.map((line) => <Cable key={line.id} line={line} props={props} height={height} cabin={cabin} />)}
     {props.data.cable.stations.map((s) => { const [x, z] = metroProjection.project(s.at), chosen = props.station === s.id; return <group key={s.id} position={[x, height(x, z) + 25, z]}>
       <mesh onClick={(e) => { e.stopPropagation(); props.onSelectStation(s.id) }}><cylinderGeometry args={[22, 22, 12, 12]} /><meshStandardMaterial color={chosen ? '#fff2bd' : '#b9d9e3'} /></mesh>
-      <Html position={[0, 45, 0]} center style={{ pointerEvents: 'none' }}><span className={`metro-station-label${chosen ? ' chosen' : ''}`}>{s.name.split(' / ')[0]}</span></Html>
+      <Html position={[0, 45, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}><span className={`metro-station-label${chosen ? ' chosen' : ''}`}>{s.name.split(' / ')[0]}</span></Html>
     </group> })}
     <CameraRig focus={props.focus} height={height} stations={props.data.cable.stations} controls={controls} />
     <PerformanceMonitor onDecline={lowerTier} />

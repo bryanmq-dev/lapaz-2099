@@ -13,7 +13,7 @@ import './metro.css'
 export function MetroView() {
   const [data, setData] = useState<MetroData | null>(null), [error, setError] = useState(''), [retry, setRetry] = useState(0)
   const [selected, setSelected] = useState<string | null>(null), [station, setStation] = useState<string | null>(null), [focus, setFocus] = useState<MetroFocus>({ station: null, seq: 0 })
-  const [panels, setPanels] = useState(true), [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [progress, setProgress] = useState('Cargando mapa…')
+  const [panels, setPanels] = useState(() => !matchMedia('(max-width: 760px)').matches), [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [progress, setProgress] = useState('Cargando mapa…')
   const tier = useTier(), stream = useMetroStream()
   useEffect(() => {
     const controller = new AbortController(); setError('')
@@ -26,6 +26,7 @@ export function MetroView() {
     const lines = data?.cable.stations.find((s) => s.id === id)?.lines ?? []
     if (id && !(selected && lines.includes(selected))) setSelected(lines[0] ?? null)
     setFocus((f) => ({ station: id, seq: f.seq + 1 }))
+    if (id && matchMedia('(max-width: 760px)').matches) setPanels(false) // en el móvil el panel taparía el zoom a la estación
   }
   const home = () => { setSelected(null); chooseStation(null) }
   const run = async (path: string, body?: unknown) => {
@@ -44,6 +45,7 @@ export function MetroView() {
       <QualityPicker /><ThemeToggle />
       <button className="icon-btn" aria-label={panels ? 'Ocultar panel' : 'Mostrar panel'} aria-expanded={panels} onClick={() => setPanels(!panels)}><PanelsTopLeft size={18} /></button>
     </header>
+    {!data && !error && <div className="metro-loading" role="status"><i aria-hidden="true" />Cargando La Paz y El Alto…</div>}
     {error && <div className="metro-error panel" role="alert"><b>No se pudo abrir el mapa</b><p>{error}</p><button className="cta sm" onClick={() => setRetry((n) => n + 1)}>Reintentar</button></div>}
     {panels && <aside className="metro-sidebar" aria-label="Control de los teleféricos">
       <section className="panel metro-section">
