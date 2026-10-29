@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, MapPin, PanelsTopLeft, RefreshCw, Siren } from 'lucide-react'
+import { ArrowLeft, CableCar, MapPin, PanelsTopLeft, RefreshCw, Siren } from 'lucide-react'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { setView } from '../view'
 import { ZONES, zoneById, type ZoneId } from '../../shared/zones'
@@ -46,7 +46,7 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
   const [follow, setFollow] = useState(true)
   const [homeSeq, setHomeSeq] = useState(0)
   const [focusAt, setFocusAt] = useState<{ ll: LL; seq: number } | null>(null)
-  const [panels, setPanels] = useState(true)
+  const [panels, setPanels] = useState(() => !matchMedia('(max-width: 720px)').matches) // en móvil los paneles son una hoja que se abre a demanda
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const { snap, status, retry } = useFleet(id)
@@ -61,7 +61,7 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
 
   // si el vehículo sale de la zona (pausa entre ida y vuelta) se deja de seguir
   const live = snap?.vehicles.find((v) => v.id === selected) ?? null
-  const select = (id: number | null) => { setSelected(id); if (id != null) setFollow(true) }
+  const select = (id: number | null) => { setSelected(id); if (id != null) { setFollow(true); if (matchMedia('(max-width: 720px)').matches) setPanels(true) } }
   /** Alerta con vehículo: sigue al vehículo. Alerta de zona (congestión): la cámara vuela al lugar. */
   const goTo = (a: FleetAlert) => {
     if (a.vehicleId) return select(a.vehicleId)
@@ -108,11 +108,11 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
             <span className="demo"><i />DEMO · SIMULACIÓN</span>
             <div className="clock"><small>HORA LA PAZ</small><b>{clock}</b></div>
             <div className="tools">
-              <button className="icon-btn wide" onClick={() => setView('metropolitano')}>Mapa unificado</button>
+              <button className="icon-btn wide" title="Vista Mi Teleférico 2050" aria-label="Vista Mi Teleférico 2050" onClick={() => setView('metropolitano')}><CableCar size={15} aria-hidden="true" /><span className="btn-label">Mi Teleférico</span></button>
             <QualityPicker sizes={data?.meta.sizes} />
               <VrEnter onQuickLook={data ? () => openQuickLook(data) : undefined} />
               <ThemeToggle />
-              <button className="icon-btn panels-toggle" aria-pressed={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>
+              <button className="icon-btn panels-toggle" aria-pressed={panels} aria-expanded={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>
                 <PanelsTopLeft size={17} />
               </button>
             </div>
@@ -121,6 +121,7 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
 
         {data && (
           <>
+            <div className="cols">
             <aside className="col col-left">
               <Kpis snap={snap} />
               <Lines lines={data.lines} routes={data.routes} hidden={hidden} snap={snap}
@@ -131,6 +132,7 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
               <AlertsPanel snap={snap} onPick={goTo} />
               <Events snap={snap} />
             </aside>
+            </div>
             <ScenarioBar hotspot={zone.hotspot.name} snap={snap} busy={busy} message={message} onRun={run} onHome={() => { setSelected(null); setFocusAt(null); setHomeSeq((n) => n + 1) }} />
           </>
         )}

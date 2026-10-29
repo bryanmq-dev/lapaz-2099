@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Activity, Gauge, Map as MapIcon, Maximize, Minimize, PanelsTopLeft, Route, SatelliteDish, Siren, TriangleAlert, type LucideIcon,
+  Activity, CableCar, Gauge, Map as MapIcon, Maximize, Minimize, PanelsTopLeft, Route, SatelliteDish, Siren, TriangleAlert, type LucideIcon,
 } from 'lucide-react'
 import { DISTRICTS, districtById } from '../simulation/cityData'
 import { sim } from '../simulation/useSimulation'
@@ -112,9 +112,9 @@ export function Dashboard({ view }: { view: SimView }) {
           </div>
         </div>
         <div className="top-right">
-          <button className="icon-btn wide" onClick={() => setView('metropolitano')}>Vista Mi Teleférico 2050</button>
+          <button className="icon-btn wide" onClick={() => setView('metropolitano')}><CableCar size={15} aria-hidden="true" /><span className="btn-label">Mi Teleférico 2050</span></button>
           <button className="icon-btn wide" title="Vistas detalladas por zona, con datos reales" onClick={() => setView('centro')}>
-            <MapIcon size={15} />Zonas en detalle
+            <MapIcon size={15} aria-hidden="true" /><span className="btn-label">Zonas en detalle</span>
           </button>
           <span className="demo"><i />DEMO · SIMULACIÓN</span>
           <div className="clock"><small>HORA SIM.</small><b>{view.clock}</b></div>
@@ -122,7 +122,7 @@ export function Dashboard({ view }: { view: SimView }) {
           <button className="icon-btn" aria-pressed={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>
             <PanelsTopLeft size={17} />
           </button>
-          <button className="icon-btn" title="Pantalla completa" aria-label="Pantalla completa" onClick={toggleFull}>
+          <button className="icon-btn btn-fs" title="Pantalla completa" aria-label="Pantalla completa" onClick={toggleFull}>
             {full ? <Minimize size={17} /> : <Maximize size={17} />}
           </button>
         </div>
