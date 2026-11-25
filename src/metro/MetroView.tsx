@@ -41,7 +41,7 @@ export function MetroView() {
     {data && <MetroScene key={retry} data={data} tier={tier} selected={selected} station={station} focus={focus} live={stream.live} onSelectLine={setSelected} onSelectStation={chooseStation} onProgress={setProgress} />}
     <header className="metro-header panel">
       <button className="icon-btn" aria-label="Volver a Ciudad" onClick={() => setView('city')}><ArrowLeft size={18} /></button>
-      <div className="metro-title"><h1>Vista «Mi Teleférico 2050»</h1><span>La Paz · El Alto · datos OpenStreetMap</span></div>
+      <div className="metro-title"><h1><span className="metro-pre">Vista «</span>Mi Teleférico 2050<span className="metro-pre">»</span></h1><span>La Paz · El Alto · datos OpenStreetMap</span></div>
       <QualityPicker /><ThemeToggle />
       <button className="icon-btn" aria-label={panels ? 'Ocultar panel' : 'Mostrar panel'} aria-expanded={panels} onClick={() => setPanels(!panels)}><PanelsTopLeft size={18} /></button>
     </header>

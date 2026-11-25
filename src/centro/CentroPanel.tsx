@@ -197,7 +197,7 @@ export function ScenarioBar({ hotspot, snap, busy, message, onRun, onHome }: {
         </div>
       </div>
       <div className="legend scenario-msg" aria-live="polite">
-        {message || <><Construction size={12} />Escenarios simulados · alertas calculadas en PostGIS</>}
+        {message || <span className="msg-default"><Construction size={12} />Escenarios simulados · alertas calculadas en PostGIS</span>}
       </div>
     </div>
   )

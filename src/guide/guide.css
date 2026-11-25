@@ -1,0 +1,63 @@
+/* ---------- guía interactiva (#guia) ---------- */
+.guia-stage { background: var(--bg); }
+.guia-header {
+  position: absolute; z-index: 50; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px;
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--hud-solid);
+}
+.guia-title { flex: 1; min-width: 0; }
+.guia-title h1 { margin: 0; font-size: 15px; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.guia-title span { font-size: 11px; color: var(--muted); }
+
+/* etiquetas de las paradas sobre el mapa (también son las anclas de driver.js) */
+.guia-label {
+  white-space: nowrap; padding: 3px 9px; min-height: 28px; border-radius: 999px; font: 600 11px var(--sans); cursor: pointer; opacity: 0.85;
+  background: var(--label-bg); color: var(--text); border: 1px solid var(--line); pointer-events: auto;
+}
+.guia-label.on { border-color: #9D084C; background: #9D084C; color: #fff; opacity: 1; font-size: 13px; padding: 5px 12px; }
+.guia-robot-anchor { display: block; width: 64px; height: 88px; pointer-events: none; }
+
+/* popover de driver.js con la piel de la app */
+.driver-popover.guia-pop {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
+  font-family: var(--sans); max-width: min(360px, calc(100vw - 24px)); padding: 14px 16px 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+.guia-pop .driver-popover-title { display: flex; align-items: center; gap: 8px; font: 700 16px var(--sans); color: var(--text); }
+.guia-pop .guia-bot { width: 22px; height: 22px; flex: none; fill: none; stroke: #9D084C; stroke-width: 1.8; stroke-linecap: round; }
+.guia-pop .driver-popover-description { font-size: 13.5px; line-height: 1.5; color: var(--t-reco); max-height: 38vh; overflow-y: auto; }
+.guia-pop .driver-popover-description p { margin: 4px 0 6px; }
+.guia-pop .driver-popover-description ul { margin: 0; padding-left: 18px; list-style: disc; }
+.guia-pop .driver-popover-description li { margin: 3px 0; }
+.guia-pop .driver-popover-progress-text { color: var(--muted); font-size: 12px; }
+.guia-pop .driver-popover-footer button {
+  min-height: 40px; padding: 0 14px; border-radius: 8px; font: 600 13px var(--sans); text-shadow: none;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+}
+.guia-pop .driver-popover-footer .driver-popover-next-btn { background: #9D084C; border-color: #9D084C; color: #fff; }
+.guia-pop .driver-popover-close-btn { color: var(--muted); width: 40px; height: 40px; }
+.guia-pop .driver-popover-arrow-side-top.driver-popover-arrow { border-top-color: var(--panel); }
+.guia-pop .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: var(--panel); }
+.guia-pop .driver-popover-arrow-side-left.driver-popover-arrow { border-left-color: var(--panel); }
+.guia-pop .driver-popover-arrow-side-right.driver-popover-arrow { border-right-color: var(--panel); }
+
+.guia-resume { position: absolute; z-index: 50; left: 50%; transform: translateX(-50%); bottom: max(28px, env(safe-area-inset-bottom)); background: #9D084C; color: #fff; border: 0; }
+.guia-attr { position: absolute; z-index: 40; left: 12px; bottom: max(6px, env(safe-area-inset-bottom)); margin: 0; font-size: 10px; color: var(--muted); }
+
+/* lista: respaldo sin WebGL y lectura cómoda */
+.guia-list {
+  position: absolute; inset: 0; overflow-y: auto; padding: 88px 12px 40px; display: grid; gap: 12px; align-content: start;
+  max-width: 640px; margin: 0 auto;
+}
+.guia-card h2 { margin: 4px 0 6px; font-size: 17px; letter-spacing: normal; text-transform: none; color: var(--text); }
+.guia-card small { color: #9D084C; font-weight: 700; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+:root[data-theme="dark"] .guia-card small, :root:not([data-theme]) .guia-card small { color: #ff7fb3; }
+.guia-card p, .guia-card li { font-size: 14px; line-height: 1.55; color: var(--t-reco); }
+.guia-card ul { margin: 6px 0 0; padding-left: 18px; }
+.guia-enter { justify-self: center; }
+.guia-card ul { list-style: disc; }
+.guia-list ~ .guia-attr { display: none; } /* en la lista no hay mapa que acreditar */
+
+/* durante el vuelo de la cámara la tarjeta y la capa de driver.js se ocultan y no reciben toques */
+.driver-popover.guia-pop, .driver-overlay { transition: opacity 0.18s ease; }
+body.guia-travel .driver-popover.guia-pop, body.guia-travel .driver-overlay { opacity: 0; visibility: hidden; transition: opacity 0.12s ease, visibility 0s linear 0.12s; }
+.guia-pop button:focus:not(:focus-visible) { outline: none; } /* driver.js enfoca la «×» al abrir; el anillo queda solo para el teclado */
