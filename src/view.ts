@@ -2,10 +2,11 @@ import { useSyncExternalStore } from 'react'
 import { zoneById, type ZoneId } from '../shared/zones'
 
 /** Vista activa de la app: ciudad conceptual o una zona con datos reales (#zona/<id>; #centro sigue funcionando). */
-export type AppView = 'city' | 'metropolitano' | ZoneId
+export type AppView = 'city' | 'metropolitano' | 'guia' | ZoneId
 
 const parse = (hash: string): AppView => {
   if (hash === '#metropolitano') return 'metropolitano'
+  if (hash === '#guia') return 'guia'
   const id = hash === '#centro' ? 'centro' : hash.startsWith('#zona/') ? hash.slice(6) : ''
   return zoneById(id)?.id ?? 'city'
 }
@@ -16,7 +17,7 @@ const subs = new Set<() => void>()
 export function setView(v: AppView) {
   if (v === current) return
   current = v
-  history.replaceState(null, '', v === 'city' ? `${location.pathname}${location.search}` : v === 'metropolitano' ? '#metropolitano' : `#zona/${v}`)
+  history.replaceState(null, '', v === 'city' ? `${location.pathname}${location.search}` : v === 'metropolitano' || v === 'guia' ? `#${v}` : `#zona/${v}`)
   subs.forEach((fn) => fn())
 }
 

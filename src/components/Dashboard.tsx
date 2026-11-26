@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Activity, CableCar, Gauge, Map as MapIcon, Maximize, Minimize, PanelsTopLeft, Route, SatelliteDish, Siren, TriangleAlert, type LucideIcon,
+  Activity, Bot, CableCar, Gauge, Map as MapIcon, Maximize, Minimize, PanelsTopLeft, Route, SatelliteDish, Siren, TriangleAlert, type LucideIcon,
 } from 'lucide-react'
 import { DISTRICTS, districtById } from '../simulation/cityData'
 import { sim } from '../simulation/useSimulation'
@@ -110,10 +110,13 @@ export function Dashboard({ view }: { view: SimView }) {
             <h1>LA PAZ <span>2050</span></h1>
             <p>SMART CITY CONTROL</p>
           </div>
+          <button className="icon-btn wide guia-btn" title="Guía interactiva de la investigación" aria-label="Guía interactiva de la investigación" onClick={() => setView('guia')}>
+            <Bot size={16} aria-hidden="true" /><span className="btn-label">Guía</span>
+          </button>
         </div>
         <div className="top-right">
-          <button className="icon-btn wide" onClick={() => setView('metropolitano')}><CableCar size={15} aria-hidden="true" /><span className="btn-label">Mi Teleférico 2050</span></button>
-          <button className="icon-btn wide" title="Vistas detalladas por zona, con datos reales" onClick={() => setView('centro')}>
+          <button className="icon-btn wide" title="Mi Teleférico 2050" aria-label="Mi Teleférico 2050" onClick={() => setView('metropolitano')}><CableCar size={15} aria-hidden="true" /><span className="btn-label">Mi Teleférico 2050</span></button>
+          <button className="icon-btn wide" title="Vistas detalladas por zona, con datos reales" aria-label="Zonas en detalle" onClick={() => setView('centro')}>
             <MapIcon size={15} aria-hidden="true" /><span className="btn-label">Zonas en detalle</span>
           </button>
           <span className="demo"><i />DEMO · SIMULACIÓN</span>

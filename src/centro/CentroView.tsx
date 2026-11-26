@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, CableCar, MapPin, PanelsTopLeft, RefreshCw, Siren } from 'lucide-react'
+import { ArrowLeft, CableCar, Ellipsis, MapPin, PanelsTopLeft, RefreshCw, Siren } from 'lucide-react'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { setView } from '../view'
 import { ZONES, zoneById, type ZoneId } from '../../shared/zones'
@@ -47,6 +47,7 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
   const [homeSeq, setHomeSeq] = useState(0)
   const [focusAt, setFocusAt] = useState<{ ll: LL; seq: number } | null>(null)
   const [panels, setPanels] = useState(() => !matchMedia('(max-width: 720px)').matches) // en móvil los paneles son una hoja que se abre a demanda
+  const [more, setMore] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const { snap, status, retry } = useFleet(id)
@@ -104,14 +105,20 @@ export function CentroView({ zone: id }: { zone: ZoneId }) {
             </div>
           </div>
           <div className="top-right">
-            <span className={`api api-${status}`}><i />{status === 'live' ? 'API EN VIVO' : status === 'connecting' ? 'CONECTANDO…' : 'API SIN CONEXIÓN'}</span>
+            {(() => { const label = status === 'live' ? 'API EN VIVO' : status === 'connecting' ? 'CONECTANDO…' : 'API SIN CONEXIÓN'; return <span className={`api api-${status}`} title={label}><i />{label}</span> })()}
             <span className="demo"><i />DEMO · SIMULACIÓN</span>
             <div className="clock"><small>HORA LA PAZ</small><b>{clock}</b></div>
-            <div className="tools">
-              <button className="icon-btn wide" title="Vista Mi Teleférico 2050" aria-label="Vista Mi Teleférico 2050" onClick={() => setView('metropolitano')}><CableCar size={15} aria-hidden="true" /><span className="btn-label">Mi Teleférico</span></button>
-            <QualityPicker sizes={data?.meta.sizes} />
-              <VrEnter onQuickLook={data ? () => openQuickLook(data) : undefined} />
-              <ThemeToggle />
+            <div className={`tools ${more ? 'more-open' : ''}`}>
+              {/* en móvil estas herramientas van en el menú «⋯» para no tapar el mapa */}
+              <div className="tools-extra">
+                <button className="icon-btn wide" title="Vista Mi Teleférico 2050" aria-label="Vista Mi Teleférico 2050" onClick={() => setView('metropolitano')}><CableCar size={15} aria-hidden="true" /><span className="btn-label">Mi Teleférico</span></button>
+                <QualityPicker sizes={data?.meta.sizes} />
+                <VrEnter onQuickLook={data ? () => openQuickLook(data) : undefined} />
+                <ThemeToggle />
+              </div>
+              <button className="icon-btn more-btn" aria-expanded={more} title="Más opciones" aria-label="Más opciones" onClick={() => setMore(!more)}>
+                <Ellipsis size={17} />
+              </button>
               <button className="icon-btn panels-toggle" aria-pressed={panels} aria-expanded={panels} title="Mostrar / ocultar paneles" aria-label="Mostrar u ocultar paneles" onClick={() => setPanels(!panels)}>
                 <PanelsTopLeft size={17} />
               </button>

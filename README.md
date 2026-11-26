@@ -30,6 +30,10 @@ La primera vez la API carga los datos y la flota de cada zona (una tras otra, en
 
 Calidad de la ciudad: selector en la cabecera de cada zona (Automática, Alta, Media, Baja), con lo que descarga cada nivel. «Automática» se elige según el dispositivo y baja si caen los FPS; la calidad baja descarga ~40 % de los edificios. También se puede forzar con `?calidad=alta|media|baja`.
 
+### Guía interactiva
+
+`#guia` (o el botón «Guía» de la vista Ciudad) recorre la investigación en 8 paradas sobre un mapa 3D de Bolivia, con el robot Wayra y pasos de driver.js; termina en el mapa 3D del Centro. Sin WebGL se muestra como lista. El contenido está en `src/guide/steps.ts`. Los límites de departamentos (`public/guia/bolivia.json`, 10 KB) salen de Natural Earth 1:10m Admin-1 (dominio público) con `python -I scripts/guia/bolivia.py <ne_10m_admin_1_states_provinces.geojson>`.
+
 ### Mapa unificado
 
 `#metropolitano` abre la vista «Mi Teleférico 2050»: La Paz y El Alto juntas con las 10 líneas simuladas. Los datos (≈90 MB) están versionados en `public/metro/`; se regeneran con `node scripts/metro/fetch.ts` (Node 24+; con `python scripts/metro/from-pbf.py <bolivia.osm.pbf>` antes si Overpass no responde) y la API los lee de `public/metro/current.json`. La API sirve el catálogo y el simulador de cabinas desde `public/metro/` (el servidor sigue necesitando PostGIS para arrancar, por las zonas). Si ya tienes otra API en :3001, `API_URL=http://localhost:3002 pnpm dev`. Prueba del motor de teleféricos: `node --test server/src/cable.test.ts`.

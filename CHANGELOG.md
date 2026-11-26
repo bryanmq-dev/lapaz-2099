@@ -4,6 +4,18 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). V
 
 ## [Sin publicar]
 
+### Agregado
+- **Guía interactiva** (`#guia`, botón «Guía» en la vista Ciudad): 8 paradas sobre un mapa 3D low-poly de Bolivia (problemática en La Paz, pregunta en el Titicaca, metodología en Uyuni, resultados en Cochabamba, límites en Sucre, software en Santa Cruz) con el robot **Wayra**, que salta entre paradas y saluda, y pasos de **driver.js** (1.10.2). Termina en el mapa 3D del Centro. Respeta `prefers-reduced-motion` y, sin WebGL, se muestra como lista. Límites de Natural Earth (dominio público) generados con `scripts/guia/bolivia.py`.
+
+### Corregido
+- **Guía en móvil:** «Siguiente» respondía recién al segundo toque porque la tarjeta se reubicaba en cada cuadro mientras volaba la cámara. Ahora la cámara vuela en un tiempo fijo (1,4 s), la tarjeta se oculta durante el vuelo y aparece con la escena quieta. El salto del robot empieza en el mismo cuadro del cambio de parada, así que ya no se corta.
+
+### Cambiado (el mapa manda en móvil)
+- **Más mapa visible a 390×844:** Ciudad 57 → 77 %, Centro 70 → 83 % (81 % con alerta de congestión), Mi Teleférico 78 → 84 %.
+- **Zona en móvil:** cabecera de una fila con menú «⋯» (Mi Teleférico, calidad, XR, tema); estado de la API como punto; escenarios en una fila deslizable; alerta de congestión en una línea; atribución en una línea; márgenes de área segura.
+- **Ciudad en móvil:** navegación con iconos, KPIs en una fila de cuatro, sin reloj simulado.
+- **Mi Teleférico en móvil:** cabecera de una fila («Mi Teleférico 2050»).
+
 ### Cambiado (auditoría de UX y responsive)
 - **Cabecera responsive** en Ciudad, Zona y Mi Teleférico: ya no se parte, solapa ni sale de la pantalla en móvil, tablet y móvil horizontal; botones de navegación con icono («Mi Teleférico»); sin botón de pantalla completa en móvil.
 - **Paneles de la zona en móvil:** se abren como hoja con el botón de paneles (antes no había forma de verlos) y se abren solos al elegir un vehículo; KPIs en 2×2.

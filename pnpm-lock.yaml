@@ -20,6 +20,9 @@ importers:
       '@react-three/xr':
         specifier: ^6.6.32
         version: 6.6.32(@react-three/fiber@9.8.1(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(three@0.186.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(three@0.186.1)
+      driver.js:
+        specifier: 1.10.2
+        version: 1.10.2
       lucide-react:
         specifier: ^1.57.0
         version: 1.57.0(@types/react@19.3.0)(react@19.3.1)
@@ -669,6 +672,9 @@ packages:
 
   draco3d@1.5.7:
     resolution: {integrity: sha512-m6WCKt/erDXcw+70IJXnG7M3awwQPAsZvJGX5zY7beBqpELw6RDGkYVU0W43AFxye4pDZ5i2Lbyc/NNGqwjUVQ==}
+
+  driver.js@1.10.2:
+    resolution: {integrity: sha512-L/EMTriJPAmg+5kIFmrjzt3TI+1NblhHOV/UZkfpgU/uxhSflGheynMBxk5oImDSy6seAEkIl6MzNOc0zdoKtg==}
 
   electron-to-chromium@1.5.456:
     resolution: {integrity: sha512-8hboqI6xesozteFb8aa7OGknvxUtTeRJLz0FoePysUEh/oWbddykIGdgpEJRbPRg/nIMfBf2DFos+H2MtvJl2A==}
@@ -1692,6 +1698,8 @@ snapshots:
       detect-libc: 1.0.3
 
   draco3d@1.5.7: {}
+
+  driver.js@1.10.2: {}
 
   electron-to-chromium@1.5.456: {}
 

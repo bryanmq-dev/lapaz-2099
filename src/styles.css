@@ -482,3 +482,63 @@ ul, ol { list-style: none; margin: 0; padding: 0; }
   .quality-pick select { min-height: 40px; }
 }
 @media (hover: none) { .icon-btn:hover { border-color: var(--line); } }
+
+/* ---------- móvil: el mapa manda (docs/plan-guia-movil.md, parte B) ---------- */
+.tools-extra { display: contents; }
+.more-btn { display: none !important; }
+.msg-default { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 720px) {
+  .hud {
+    padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+
+  /* Centro y zonas: cabecera de una fila; lo secundario va en «⋯» */
+  .hud-centro .top { flex-wrap: nowrap; }
+  .hud-centro .brand h1 { display: none; } /* el selector ya dice la zona */
+  .hud-centro .top-right { width: auto; flex: none; flex-wrap: nowrap; }
+  .hud-centro .api { font-size: 0; gap: 0; padding: 7px; } /* solo el punto de estado; el texto queda en title y lector de pantalla */
+  .hud-centro .tools { flex-wrap: nowrap; }
+  .hud-centro .more-btn { display: inline-flex !important; }
+  .hud-centro .tools-extra { display: none; }
+  .hud-centro .tools.more-open .tools-extra {
+    display: flex; position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; gap: 6px; padding: 8px;
+    border-radius: 8px; background: var(--hud-solid); border: 1px solid var(--line); pointer-events: auto;
+  }
+
+  /* escenarios: una sola fila que se desliza */
+  .hud-centro .controls { padding: 6px; gap: 4px; }
+  .hud-centro .controls-row { display: flex; flex-wrap: nowrap; justify-content: flex-start; gap: 6px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .hud-centro .controls-row::-webkit-scrollbar { display: none; }
+  .hud-centro .controls-row > * { flex: none; }
+  .hud-centro .cta.sm { white-space: nowrap; min-height: 44px; }
+  .hud-centro .icon-group { gap: 6px; }
+  .hud-centro .scenario-msg { font-size: 10px; min-height: 0; } /* la advertencia «simulado» se queda visible */
+
+  /* congestión: una línea; el detalle sigue en el panel de alertas */
+  .hud-centro .banner { flex-direction: row; align-items: center; padding: 6px 8px 6px 12px; }
+  .hud-centro .banner-main span { display: none; }
+  .hud-centro .banner-main, .hud-centro .banner-main > div { min-width: 0; }
+  .hud-centro .banner-main b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hud-centro .banner-go { font-size: 0; gap: 0; min-width: 44px; justify-content: center; } /* solo el icono; el texto queda para el lector de pantalla */
+  .download { top: 80px; }
+
+  .hud-centro .attribution { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 9.5px; padding: 2px 8px; }
+
+  /* Ciudad: navegación con iconos y KPIs en una fila */
+  .hud:not(.hud-centro) .clock { display: none; }
+  .hud:not(.hud-centro) .top-right .btn-label { display: none; }
+  .hud:not(.hud-centro) .top-right .icon-btn.wide { width: 44px; padding: 0; justify-content: center; }
+  .hud:not(.hud-centro) .top-right { gap: 6px; }
+  .hud:not(.hud-centro) .demo { padding: 3px 8px; font-size: 9.5px; letter-spacing: 0.08em; }
+  .hud:not(.hud-centro) .controls { padding: 8px; gap: 6px; }
+  .hud:not(.hud-centro) .controls-row { gap: 8px; }
+  .hud:not(.hud-centro) .controls .cta { padding: 0 14px; }
+  .hud .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .hud .metric { padding: 6px; }
+  .hud .metric-top { font-size: 9px; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; }
+  .hud .metric-top svg { display: none; }
+  .hud .metric-val { margin-top: 3px; font-size: 18px; }
+  .hud .metric-val small { font-size: 10px; margin-left: 1px; }
+}
+.brand .guia-btn { margin-left: 14px; align-self: center; }
